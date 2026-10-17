@@ -434,6 +434,8 @@ button.person[disabled]{cursor:default;opacity:1}
 .qadd:active{transform:scale(.9)}
 .qadd:disabled{opacity:.5}
 .qin.st-want{color:var(--accent)}
+button.qin{cursor:pointer;border:0}
+button.qin:active{transform:scale(.9)}
 .qin.st-watching{color:var(--gold-text)}
 .qin.st-seen{color:var(--good)}
 .hs{margin:0 0 10px}

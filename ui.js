@@ -74,7 +74,7 @@
   function catTile(r) {
     var st = F.tmdbStatus(r.mt, r.tid), data = ' data-mt="' + r.mt + '" data-tid="' + r.tid + '" data-title="' + esc(r.title) + '" data-year="' + esc(r.year) + '" data-poster="' + esc(r.poster) + '"';
     var btn = '<button class="tile glow" style="--h:' + hue(r.tid) + '" data-act="cat"' + data + '><span class="poster"><span class="ph">' + esc(r.title) + '</span><img src="' + esc(F.tmdbImg(r.poster, 'w342')) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' + (r.vote ? '<span class="badge"><span class="tm">★ ' + r.vote.toFixed(1) + '</span></span>' : '') + (r.rank ? '<span class="rk" aria-label="Місце ' + r.rank + '">' + r.rank + '</span>' : '') + '</span><span class="name">' + esc(r.title) + '</span><span class="yr">' + esc(r.year) + '</span></button>';
-    var mark = st && ST_IC[st] ? '<span class="qin st-' + st + '" role="img" aria-label="' + ST_IC[st][1] + '">' + ic(ST_IC[st][0], 'sm') + '</span>' : '<button class="qadd" data-act="catadd"' + data + ' aria-label="В обране: ' + esc(r.title) + '">' + ic('plus', 'sm') + '</button>';
+    var mark = st && ST_IC[st] ? (st === 'want' ? '<button class="qin st-want" data-act="catun"' + data + ' aria-label="Прибрати з обраних: ' + esc(r.title) + '">' + ic('heart', 'sm') + '</button>' : '<span class="qin st-' + st + '" role="img" aria-label="' + ST_IC[st][1] + '">' + ic(ST_IC[st][0], 'sm') + '</span>') : '<button class="qadd" data-act="catadd"' + data + ' aria-label="В обране: ' + esc(r.title) + '">' + ic('plus', 'sm') + '</button>';
     return '<div class="tw">' + btn + mark + '</div>';
   }
   // «Сховати переглянуте» у каталозі
@@ -864,6 +864,11 @@
       case 'reshelf': { var rs = F.collDefs(ui.homeMt).filter(function (d) { return d.id === el.dataset.id; })[0]; if (rs) { delete ui.cat.sh[rs.id]; loadShelf(rs); paintShelf(rs); } break; }
       case 'coll': openColl(el.dataset.id); break;
       case 'hideseen': ui.hideSeen = !ui.hideSeen; try { localStorage.setItem('kinoman_hide_seen', ui.hideSeen ? '1' : ''); } catch (e) { /* без збереження */ } render(); break;
+      case 'catun': {
+        var un = F.tmdbItem(el.dataset.mt, el.dataset.tid);
+        if (un && un.status === 'want') { var ug = F.removeItem(un.id); render(); if (ug) toast('Прибрано з «Обраних»', 'Повернути', function () { F.restoreItem(ug); render(); }); }
+        break;
+      }
       case 'catadd': {
         var qk = 'add' + el.dataset.mt + el.dataset.tid; if (ui.busy[qk]) return; ui.busy[qk] = true; el.disabled = true;
         try {
@@ -902,7 +907,10 @@
       case 'retry': loadSheetItem(); renderSheet(); break;
       case 'status': {
         var cur = F.getItem(ui.sheet.id), it0 = sheetItem(); if (!it0) return;
-        if (cur && cur.status === el.dataset.st) { break; }
+        if (cur && cur.status === el.dataset.st) {
+          if (cur.status === 'want') { var wg = F.removeItem(cur.id); renderSheet(); render(); if (wg) toast('Прибрано з «Обраних»', 'Повернути', function () { F.restoreItem(wg); renderSheet(); render(); }); }
+          break;
+        }
         if (el.dataset.st === 'seen') ui.sheet.stamp = true;
         F.setStatus(it0, el.dataset.st); break;
       }
