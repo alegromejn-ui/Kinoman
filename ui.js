@@ -383,7 +383,9 @@
     if (sh.perr) return h + '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(sh.perr)) + '<p style="margin:10px 0 0"><button class="btn sm" data-act="reperson">Спробувати ще раз</button></p></div></div></div>';
     if (!d) return h + '<div class="spin" role="status" aria-label="Завантаження"></div></div>';
     if (d.bio) h += '<p class="plot bio' + (sh.bioOpen ? ' open' : '') + '">' + esc(d.bio) + '</p>' + (d.bio.length > 320 ? '<p style="margin:0"><button class="btn ghost sm" data-act="bio">' + (sh.bioOpen ? 'Згорнути' : 'Читати далі') + '</button></p>' : '');
-    if (d.known.length) h += '<h2>Фільми й серіали</h2><div class="tgrid">' + d.known.map(function (r) { return catTile(r).replace('</span></button>', '</span>' + (r.character ? '<span class="role">' + esc(r.character) + '</span>' : '') + '</button>'); }).join('') + '</div>';
+    var kn = sh.allKnown ? d.known : d.known.slice(0, 12);
+    if (d.known.length) h += '<h2>Фільми й серіали</h2><div class="tgrid">' + kn.map(function (r) { return catTile(r).replace('</span></button>', '</span>' + (r.character ? '<span class="role">' + esc(r.character) + '</span>' : '') + '</button>'); }).join('') + '</div>';
+    if (d.known.length > 12) h += '<p style="margin:16px 0 0"><button class="btn ghost block" data-act="allknown">' + (sh.allKnown ? 'Згорнути' : 'Показати всі ' + d.known.length) + '</button></p>';
     return h + '</div>';
   }
   async function openPerson(p) {
@@ -550,8 +552,7 @@
     var st = ui.tab;
     app.className = ui.enter ? 'enter' : ''; ui.enter = false;
     app.innerHTML = st === 'home' ? renderHome() : st === 'search' ? renderSearch() : st === 'more' ? renderMore() : renderList(st);
-    var cnt = { want: F.list('want').length, watching: F.list('watching').length };
-    tabsEl.innerHTML = TABS.map(function (t) { return '<button data-act="tab" data-tab="' + t[0] + '" aria-label="' + t[1] + '"' + (st === t[0] ? ' aria-current="page"' : '') + '>' + ic(t[2]) + '<span>' + t[1] + '</span>' + (cnt[t[0]] ? '<span class="cnt">' + cnt[t[0]] + '</span>' : '') + '</button>'; }).join('');
+    tabsEl.innerHTML = TABS.map(function (t) { return '<button data-act="tab" data-tab="' + t[0] + '" aria-label="' + t[1] + '"' + (st === t[0] ? ' aria-current="page"' : '') + '>' + ic(t[2]) + '<span>' + t[1] + '</span>' + '</button>'; }).join('');
     if (ui.sheet) renderSheet();
     if (st === 'home') loadCat();
   }
@@ -608,6 +609,7 @@
       case 'back': { var prev = ui.stack.pop(); if (prev && prev.person) openPerson(prev.person); else if (prev) openSheet(prev.id, prev.brief); break; }
       case 'person': pushCurrent(); openPerson({ id: Number(el.dataset.pid), name: el.dataset.name, photo: el.dataset.photo }); break;
       case 'reperson': if (ui.sheet && ui.sheet.person) openPerson(ui.sheet.person); break;
+      case 'allknown': if (ui.sheet) { ui.sheet.allKnown = !ui.sheet.allKnown; renderSheet(); } break;
       case 'bio': if (ui.sheet) { ui.sheet.bioOpen = !ui.sheet.bioOpen; renderSheet(); } break;
       case 'hgenre': ui.homeGenre = el.dataset.g; render(); break;
       case 'redisc': Object.keys(ui.dc).forEach(function (k) { if (ui.dc[k].error) delete ui.dc[k]; }); render(); break;
