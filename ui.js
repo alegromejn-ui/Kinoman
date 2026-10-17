@@ -181,10 +181,11 @@
     var mine = ui.homeView === 'mine';
     h += '<div class="hv" role="tablist" aria-label="Головна">' + [['mine', 'Моє'], ['cat', 'Каталог']].map(function (v) { return '<button type="button" role="tab" data-act="homeview" data-v="' + v[0] + '" aria-selected="' + (ui.homeView === v[0]) + '">' + v[1] + '</button>'; }).join('') + '</div>';
     if (mine) {
-      var body0 = newsHtml() + shelfHtml('Дивлюсь зараз', F.list('watching').slice(0, 12), 'watching') + soonHtml() + F.colList().map(function (c) { return plainShelf(c.name, F.colItems(c.id)); }).join('');
+      var body0 = newsHtml() + shelfHtml('Дивлюсь зараз', F.list('watching').slice(0, 12), 'watching') + marSection() + soonHtml() + F.colList().map(function (c) { return plainShelf(c.name, F.colItems(c.id)); }).join('');
       return h + (body0 || emptyHtml('play', 'Тут буде те, що ви дивитесь', 'Нові серії, найближчі прем’єри й заплановані перегляди з’являться тут. Почніть з каталогу.', '<p><button class="btn" data-act="homeview" data-v="cat">Відкрити каталог</button></p>'));
     }
     h += adviceHtml();
+    if (F.tmdbKeyOf()) h += '<button class="marentry" data-act="marfind">' + ic('film', 'sm') + '<span><b>Кіномарафони</b><span>Франшизи по порядку: «Володар перснів», Marvel, «Гаррі Поттер»…</span></span>' + ic('right', 'sm') + '</button>';
     var mt = ui.homeMt, toon = mt === 'toon';
     h += '<div class="seg cat-seg" role="group" aria-label="Каталог">' + F.CATS.map(function (t) { return '<button type="button" data-act="hometype" data-mt="' + t[0] + '" aria-pressed="' + (mt === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
     if (!F.tmdbKeyOf()) return h + '<div class="notice">' + ic('film') + '<div><b>Каталог потребує ключ TMDB</b><div class="sub">З ним тут з’являться добірки: що в тренді, що йде в кіно, топи за жанрами й десятиліттями. Ключ безкоштовний, його вставляють у розділі «Ще».</div><p style="margin:10px 0 0"><button class="btn sm" data-act="tab" data-tab="more">Додати ключ</button></p></div></div>';
@@ -204,8 +205,60 @@
     return h;
   }
   // ---------- Уся добірка ----------
+  // ---------- Кіномарафони ----------
+  function marBar(done, total) { var p = total ? Math.round(done / total * 100) : 0; return '<span class="mbar" role="progressbar" aria-valuemin="0" aria-valuemax="' + total + '" aria-valuenow="' + done + '" aria-label="Переглянуто ' + done + ' з ' + total + '"><i style="width:' + p + '%"></i></span>'; }
+  function marSection() {
+    var ms = F.marathons(); if (!ms.length) return '';
+    return '<section class="mars"><div class="sec-h"><h2>Кіномарафони</h2>' + (F.tmdbKeyOf() ? '<button class="more-link" data-act="marfind">Новий</button>' : '') + '</div>' + ms.map(function (m) {
+      return '<button class="marrow" data-act="maropen" data-id="' + esc(m.id) + '"><span class="mt"><b>' + esc(m.name) + '</b><span>' + (m.done === m.total ? 'Пройдено повністю' : m.next ? 'Далі: ' + esc(m.next.title) + (m.next.year ? ' (' + esc(m.next.year) + ')' : '') : '') + '</span></span><span class="mprog"><b>' + m.done + ' з ' + m.total + '</b>' + marBar(m.done, m.total) + '</span></button>';
+    }).join('') + '</section>';
+  }
+  function marLink(sh, lib) {
+    var x = exOf(sh, lib), tc = (lib && lib.tcoll) || x.tcoll; if (!tc || !F.tmdbKeyOf()) return '';
+    var saved = F.marathonOf('mt' + tc.id);
+    return '<button class="marlink" data-act="martmdb" data-cid="' + tc.id + '">' + ic('film', 'sm') + '<span><b>Кіномарафон «' + esc(F.collName(tc.name)) + '»</b><span>' + (saved ? 'Переглянуто ' + saved.done + ' з ' + saved.total : 'Усі частини по порядку') + '</span></span>' + ic('right', 'sm') + '</button>';
+  }
+  function marHtml(c) {
+    var m = c.mar, saved = m.id ? F.marathonOf(m.id) : null, data = saved || m.data;
+    var parts = (saved ? saved.parts : (data.parts || []).map(function (p, i) { return { tid: p.tid, mt: p.mt, title: p.title, year: p.year, poster: p.poster, rank: i + 1, st: F.tmdbStatus(p.mt, p.tid) }; }));
+    var done = parts.filter(function (p) { return p.st === 'seen'; }).length, left = parts.filter(function (p) { return !p.st; }).length;
+    var h = '<div class="sheetbar">' + (ui.stack.length ? '<button class="back" data-act="back" aria-label="Назад">' + ic('left') + '</button>' : '') + '<button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button></div><div class="coll marsheet">';
+    h += '<h3>' + esc(data.name) + '</h3><p class="sub">' + parts.length + ' ' + plural(parts.length, 'частина', 'частини', 'частин') + ' у порядку перегляду' + (data.src === 'ai' ? ', склав Gemini' : '') + '</p>';
+    h += '<div class="mprog big"><b>Переглянуто ' + done + ' з ' + parts.length + '</b>' + marBar(done, parts.length) + '</div>';
+    if (data.missed) h += '<p class="fine">' + data.missed + ' ' + plural(data.missed, 'назву', 'назви', 'назв') + ' не знайдено в TMDB, їх пропущено.</p>';
+    h += '<p class="bak-acts">' + (saved ? (left ? '<button class="btn sm" data-act="maraddall"' + (m.busy ? ' disabled' : '') + '>' + ic('heart', 'sm') + 'Усе непереглянуте в «Обрані» (' + left + ')</button>' : '') + '<button class="btn ghost sm" data-act="mardel">Видалити марафон</button>'
+      : '<button class="btn sm" data-act="marsave">' + ic('play', 'sm') + 'Почати марафон</button>') + '</p>';
+    if (m.msg) h += '<p class="' + (m.msg.ok ? 'ok' : 'er-t') + '" role="status">' + esc(m.msg.text) + '</p>';
+    h += '<div class="tgrid">' + parts.map(catTile).join('') + '</div>';
+    return h + '</div>';
+  }
+  function marFindHtml(c) {
+    var f = c.find;
+    var h = '<div class="sheetbar"><button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button></div><div class="coll">';
+    h += '<h3>Кіномарафони</h3><p class="sub">Знайдіть франшизу: усі частини стануть по порядку, а додаток рахуватиме, скільки вже переглянуто.</p>';
+    h += '<form class="keyrow" data-form="marq"><input type="search" id="marq" name="marq" value="' + esc(f.q || '') + '" placeholder="Напр. Володар перснів, Marvel хронологічно" autocomplete="off" aria-label="Франшиза"><button class="btn" type="submit"' + (f.busy ? ' disabled' : '') + '>Знайти</button></form>';
+    if (f.busy) h += '<div class="spin" role="status" aria-label="Шукаємо"></div>';
+    if (f.err) h += '<p class="er-t" role="status">' + esc(f.err) + '</p>';
+    if (f.res) {
+      h += f.res.length ? '<div class="baklist">' + f.res.map(function (r) { return '<button class="marrow" data-act="martmdb" data-cid="' + r.cid + '"><span class="mt"><b>' + esc(r.name) + '</b><span>Колекція TMDB</span></span>' + ic('right', 'sm') + '</button>'; }).join('') + '</div>' : '<p class="fine">У TMDB такої колекції немає.</p>';
+      if (F.gemKeyOf()) h += '<p class="bak-acts"><button class="btn ghost sm" data-act="marai"' + (f.busy ? ' disabled' : '') + '>' + ic('sparkle', 'sm') + 'Скласти з Gemini: «' + esc(f.q) + '»</button></p><p class="fine">Gemini підійде для всесвітів без окремої колекції (Marvel, DC) або «хронологічно».</p>';
+      else h += '<p class="fine">Для Marvel чи DC додайте ключ Gemini в «Ще»: він складе список сам.</p>';
+    }
+    return h + '</div>';
+  }
+  async function openMarTmdb(cid) {
+    var key = 'mt' + Math.floor(Number(cid)); if (ui.busy[key]) return;
+    if (ui.sheet && !ui.sheet.wheel) pushCurrent();
+    if (F.marathonOf(key)) { ui.sheet = { coll: { id: 'mar', title: F.marathonOf(key).name, mar: { id: key } } }; renderSheet(); return; }
+    ui.busy[key] = true; toast('Відкриваємо…');
+    try { var d = await F.tmdbCollection(cid); toastEl.classList.remove('show'); ui.sheet = { coll: { id: 'mar', title: d.name, mar: { id: null, data: d } } }; renderSheet(); var n = $('.sheet', sheetRoot); if (n) n.scrollTop = 0; }
+    catch (e) { toast(F.describeError(e)); if (ui.stack.length) { var p = ui.stack.pop(); if (p.coll) showColl(p.coll); else if (p.person) openPerson(p.person); else openSheet(p.id, p.brief); } }
+    delete ui.busy[key];
+  }
   function collHtml(sh) {
     var c = sh.coll;
+    if (c.mar) return marHtml(c);
+    if (c.find) return marFindHtml(c);
     var h = '<div class="sheetbar">' + (ui.stack.length ? '<button class="back" data-act="back" aria-label="Назад">' + ic('left') + '</button>' : '') + '<button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button></div><div class="coll"><h3>' + esc(c.title) + '</h3><p class="sub">' + c.items.length + ' ' + plural(c.items.length, 'фільм і серіал', 'фільми й серіали', 'фільмів і серіалів') + '</p>';
     h += '<div class="tgrid">' + vis(c.items).map(catTile).join('') + '</div>';
     if (c.error) h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(c.error)) + '</div></div>';
@@ -313,7 +366,9 @@
         : emptyHtml('eye', 'Поки нічого не переглянуто', 'Позначайте фільми як переглянуті й ставте свої оцінки від 1 до 10.', '<p><button class="btn" data-act="tab" data-tab="search">Знайти фільм</button></p>'));
     }
     h += '<div class="seg" role="group" aria-label="Тип">' + [['', 'Усе'], ['movie', 'Фільми'], ['series', 'Серіали']].map(function (t) { return '<button type="button" data-act="ltype" data-type="' + t[0] + '" aria-pressed="' + (f.type === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
-    h += '<div class="tools"><select data-change="time" aria-label="Час">' + [['', 'Будь-який час'], ['90', 'До 90 хв'], ['120', '90 хв – 2 год'], ['121', 'Понад 2 год']].map(function (o) { return '<option value="' + o[0] + '"' + ((f.time || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select><select data-change="sort" aria-label="Сортування">' + Object.keys(F.SORTS).map(function (k) { return '<option value="' + k + '"' + (f.sort === k ? ' selected' : '') + '>' + esc(F.SORTS[k]) + '</option>'; }).join('') + '</select></div>';
+    h += '<div class="tools"><select data-change="time" aria-label="Час">' + [['', 'Будь-який час'], ['90', 'До 90 хв'], ['120', '90 хв – 2 год'], ['121', 'Понад 2 год']].map(function (o) { return '<option value="' + o[0] + '"' + ((f.time || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select><select data-change="sort" aria-label="Сортування">' + F.SORTS_FOR[status].map(function (k) { return '<option value="' + k + '"' + (f.sort === k ? ' selected' : '') + '>' + esc(F.SORTS[k]) + '</option>'; }).join('') + '</select></div>';
+    var oc = status === 'want' ? F.oldCount('want') : 0;
+    if (oc || f.old) h += '<p class="hs"><button type="button" class="chip' + (f.old ? ' on' : '') + '" data-act="oldf" aria-pressed="' + !!f.old + '">' + ic('clock', 'sm') + 'Давно лежить ' + oc + '</button></p>';
     var gs = F.genres(status);
     if (gs.length > 1) h += '<div class="chips" role="group" aria-label="Жанри"><button class="chip' + (!f.genre ? ' on' : '') + '" data-act="genre" data-genre="">Усі жанри</button>' + gs.slice(0, 14).map(function (g) { return '<button class="chip' + (f.genre === g.name ? ' on' : '') + '" data-act="genre" data-genre="' + esc(g.name) + '">' + esc(F.genreUk(g.name)) + ' ' + g.count + '</button>'; }).join('') + '</div>';
     if (!items.length) return h + emptyHtml('film', 'За цим фільтром порожньо', 'Змініть тип, жанр чи час.');
@@ -321,6 +376,12 @@
   }
 
   // ---------- Ще ----------
+  function archPanel() {
+    var a = F.archived(); if (!a.length) return '';
+    var h = '<section class="panel"><div class="sec-h" style="margin:0 0 6px"><h2 style="margin:0">Архів</h2><button class="more-link" data-act="archshow">' + (ui.archOpen ? 'Сховати' : 'Показати ' + a.length) + '</button></div><p class="sub" style="margin:0">Прибране зі списків, але не видалене. Оцінки враховуються в статистиці.</p>';
+    if (ui.archOpen) h += '<div class="baklist">' + a.map(function (it) { return '<div class="bakrow"><button class="archopen" data-act="open" data-id="' + it.id + '"><b>' + esc(it.titleUk || it.title) + '</b> <i>' + esc(NAMES[it.status]) + (it.year ? ', ' + esc(it.year) : '') + '</i></button><button class="chip" data-act="arch" data-id="' + it.id + '" data-on="">Повернути</button></div>'; }).join('') + '</div>';
+    return h + '</section>';
+  }
   function yearPanel() {
     var y = new Date(FB.now()).getFullYear(), st = F.yearStats(y);
     if (!st.count) { var p = F.yearStats(y - 1); if (p.count) { st = p; y = y - 1; } }
@@ -345,7 +406,20 @@
       '<label class="fl" for="synccode">Секретне слово</label><input type="password" id="synccode" name="synccode" value="' + esc(so.code) + '" autocomplete="off" autocapitalize="none" spellcheck="false"><p style="margin:10px 0 0;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" type="submit">Зберегти</button><button class="btn ghost sm" type="button" data-act="syncnow"' + (so.url && so.code ? '' : ' disabled') + '>' + ic('refresh', 'sm') + 'Синхронізувати</button></p></form>';
     if (ui.syncMsg) h += '<p class="' + (ui.syncMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.syncMsg.text) + '</p>';
     if (so.at) h += '<p class="fine">Остання синхронізація: ' + esc(new Date(so.at).toLocaleString('uk-UA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })) + '. Додаток синхронізується й сам, коли ви його відкриваєте.</p>';
-    return h + '<p class="fine">Адреса й слово зберігаються лише в цьому телефоні та не потрапляють у копію даних.</p></section>';
+    h += '<p class="fine">Адреса й слово зберігаються лише в цьому телефоні та не потрапляють у копію даних.</p>';
+    if (so.url && so.code) h += bakHtml(so);
+    return h + '</section>';
+  }
+  function bakHtml(so) {
+    var b = ui.bak || {}, h = '<div class="bak"><h3>Резервні копії в Google Диску</h3>';
+    h += '<p class="sub">' + (so.bak ? 'Остання копія: ' + esc(new Date(so.bak).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' })) + '. ' : 'Копій ще не було. ') + 'Додаток робить копію сам раз на тиждень; зберігаються останні 8 у папці «Kinoman — копії».</p>';
+    h += '<p class="bak-acts"><button class="btn sm" data-act="baknow"' + (b.busy ? ' disabled' : '') + '>Зберегти копію зараз</button><button class="btn ghost sm" data-act="baklist"' + (b.busy ? ' disabled' : '') + '>Відновити з копії</button></p>';
+    if (b.msg) h += '<p class="' + (b.msg.ok ? 'ok' : 'er-t') + '" role="status">' + esc(b.msg.text) + '</p>';
+    if (b.old) h += '<p class="fine">Як оновити скрипт: відкрийте свій проєкт на script.google.com, замініть весь код новим файлом kinoman-sync.gs (своє слово в SECRET залиште), далі «Розгорнути» → «Керувати розгортаннями» → олівець → «Нова версія» → «Розгорнути». Адреса не зміниться.</p>';
+    if (b.list) h += b.list.length ? '<div class="baklist">' + b.list.map(function (x) {
+      var p = x.date.split('-'); return '<div class="bakrow"><span>' + esc(new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })) + (x.size ? ' <i>' + Math.max(1, Math.round(x.size / 1024)) + ' КБ</i>' : '') + '</span><button class="chip" data-act="bakrestore" data-name="' + esc(x.name) + '">Відновити</button></div>';
+    }).join('') + '</div><p class="fine">Відновлення додає записи з копії: нічого з теперішнього не видаляється, новіші зміни не затираються.</p>' : '<p class="fine">У папці ще немає копій.</p>';
+    return h + '</div>';
   }
   // Картинка «Мій рік у кіно» для збереження чи надсилання
   async function saveYearImage(y) {
@@ -393,7 +467,7 @@
     if (ui.gemMsg) h += '<p class="' + (ui.gemMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.gemMsg.text) + '</p>';
     h += '<p class="fine">Ключ зберігається лише в цьому телефоні й не потрапляє в копію даних. До Google надсилається тільки назва, яку ви шукаєте, та опис фільму для перекладу. Це безкоштовно в межах ліміту Google.</p></section>';
     h += '<section class="panel"><h2>Ваша статистика</h2><div class="stats"><div class="stat"><div class="v">' + s.seen + '</div><div class="n">переглянуто</div></div><div class="stat"><div class="v">' + s.want + '</div><div class="n">в обраному</div></div><div class="stat"><div class="v">' + (s.avgMine == null ? '—' : s.avgMine.toFixed(1)) + '</div><div class="n">середня оцінка</div></div><div class="stat"><div class="v">' + (s.minutes ? esc(F.fmtMinutes(s.minutes)) : '—') + '</div><div class="n">часу за екраном</div></div></div>' + (s.topGenres.length ? '<p class="sub">Найчастіше: ' + s.topGenres.map(function (g) { return esc(F.genreUk(g.name)); }).join(', ') + '</p>' : '') + '</section>';
-    h += yearPanel() + chartsPanel() + recordsPanel() + colPanel() + syncPanel();
+    h += yearPanel() + chartsPanel() + recordsPanel() + colPanel() + archPanel() + syncPanel();
     h += '<section class="panel"><h2>Копія даних</h2><p class="sub" style="margin:0 0 10px">Списки, оцінки й нотатки лежать тільки в цьому телефоні. Збережіть копію, щоб перенести їх на інший пристрій чи не втратити при очищенні браузера.</p><div class="actions" style="margin-top:0"><button class="btn ghost" data-act="export">' + ic('download', 'sm') + 'Зберегти копію</button><button class="btn ghost" data-act="import">' + ic('upload', 'sm') + 'Відновити</button></div><input type="file" id="import-file" accept="application/json,.json" class="hide">';
     if (ui.backupMsg) h += '<p class="' + (ui.backupMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.backupMsg.text) + '</p>';
     if (F.isSaveFailed()) h += '<p class="er-t">Телефон не дає зберегти дані. Звільніть місце або вимкніть приватний режим.</p>';
@@ -667,10 +741,12 @@
     if (dl) h += '<dl class="dl">' + dl + '</dl>';
     h += nextBlock(sh, lib, it);
     h += seasonBlock(sh, it, lib);
+    h += marLink(sh, lib);
     h += recsBlock(sh, lib);
     h += '<div class="actions"><a class="btn ghost sm" href="https://www.imdb.com/title/' + esc(it.id) + '/" target="_blank" rel="noopener">' + ic('link', 'sm') + 'Відкрити в IMDb</a>';
     if (lib) h += '<button class="btn ghost sm" data-act="shareimg" data-id="' + esc(lib.id) + '">' + ic('download', 'sm') + 'Поділитись' + '</button>';
     if (lib) h += '<button class="btn ghost sm" data-act="refresh"' + (sh.refreshing ? ' disabled' : '') + '>' + ic('refresh', 'sm') + (sh.refreshing ? 'Оновлюємо…' : 'Оновити рейтинги') + '</button><button class="btn danger sm" data-act="remove">' + ic('trash', 'sm') + 'Видалити зі списків</button>';
+    if (lib) h += '<button class="btn ghost sm" data-act="arch" data-on="' + (lib.arch ? '' : '1') + '">' + ic('archive', 'sm') + (lib.arch ? 'Повернути з архіву' : 'В архів') + '</button>';
     h += '</div>';
     if (sh.error) h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(sh.error)) + '</div></div>';
     if (lib && lib.fetchedAt) h += '<p class="fine">Рейтинги станом на ' + esc(new Date(lib.fetchedAt).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })) + ' Вони змінюються, тож за потреби оновіть.</p>';
@@ -754,6 +830,35 @@
       case 'homeview': ui.homeView = el.dataset.v === 'mine' ? 'mine' : 'cat'; try { localStorage.setItem('kinoman_home_view', ui.homeView); } catch (e) { /* без збереження */ } ui.enter = true; render(); window.scrollTo(0, 0); break;
       case 'resume': { var ri = F.getItem(el.dataset.id); if (ri) { F.setStatus(ri, 'watching'); toast('«' + (ri.titleUk || ri.title) + '» знову в «Дивлюсь»'); } break; }
       case 'skipseason': { var si = F.getItem(el.dataset.id); if (si) { var prevS = si.doneS; F.skipSeason(si.id); toast('Сховано. Нагадаю про наступний сезон', 'Повернути', function () { F.skipSeason(si.id, prevS); }); } break; }
+      case 'oldf': { var lf = ui.lists[ui.tab]; if (lf) { lf.old = !lf.old; render(); } break; }
+      case 'arch': {
+        var aid = el.dataset.id || (ui.sheet && ui.sheet.id), on = !!el.dataset.on, ai0 = F.getItem(aid); if (!ai0) break;
+        F.setArch(aid, on);
+        if (on) { dismiss(); toast('Перенесено в архів. Знайдете в «Ще»', 'Повернути', function () { F.setArch(aid, false); }); } else { if (ui.sheet && ui.sheet.id === aid) renderSheet(); toast('Повернуто до «' + NAMES[ai0.status] + '»'); }
+        break;
+      }
+      case 'archshow': ui.archOpen = !ui.archOpen; render(); break;
+      case 'marfind': if (ui.sheet && !ui.sheet.wheel) pushCurrent(); ui.sheet = { coll: { id: 'marfind', title: 'Кіномарафони', find: { q: '', res: null, busy: false, err: '' } } }; renderSheet(); setTimeout(function () { var q = $('#marq'); if (q) q.focus(); }, 50); break;
+      case 'martmdb': openMarTmdb(el.dataset.cid); break;
+      case 'maropen': { var mo = F.marathonOf(el.dataset.id); if (mo) { ui.sheet = { coll: { id: 'mar', title: mo.name, mar: { id: el.dataset.id } } }; ui.stack = []; renderSheet(); } break; }
+      case 'marai': {
+        var fc = ui.sheet && ui.sheet.coll && ui.sheet.coll.find; if (!fc || fc.busy) return; fc.busy = true; fc.err = ''; renderSheet();
+        try { var am = await F.aiMarathon(fc.q); fc.busy = false; if (!am || !am.parts.length) { fc.err = 'Gemini не склав список, спробуйте інакше сформулювати.'; renderSheet(); break; } pushCurrent(); ui.sheet = { coll: { id: 'mar', title: am.name, mar: { id: null, data: am } } }; renderSheet(); var ns = $('.sheet', sheetRoot); if (ns) ns.scrollTop = 0; }
+        catch (e) { fc.busy = false; fc.err = F.describeError(e); renderSheet(); }
+        break;
+      }
+      case 'marsave': { var mm = ui.sheet && ui.sheet.coll && ui.sheet.coll.mar; if (!mm || !mm.data) break; var mid = F.saveMarathon(mm.data); if (mid) { mm.id = mid; toast('Марафон додано в «Моє»'); renderSheet(); } break; }
+      case 'mardel': { var md = ui.sheet && ui.sheet.coll && ui.sheet.coll.mar; if (!md || !md.id) break; if (!window.confirm('Видалити марафон? Фільми у ваших списках залишаться.')) return; F.removeMarathon(md.id); closeSheet(); toast('Марафон видалено'); break; }
+      case 'maraddall': {
+        var ma = ui.sheet && ui.sheet.coll && ui.sheet.coll.mar, mo2 = ma && F.marathonOf(ma.id); if (!mo2 || ma.busy) return;
+        var todo = mo2.parts.filter(function (p) { return !p.st; }); ma.busy = true; var okN = 0, failN = 0;
+        for (var ti = 0; ti < todo.length; ti++) {
+          ma.msg = { ok: true, text: 'Додаємо ' + (ti + 1) + ' з ' + todo.length + '…' }; renderSheet();
+          try { var tid0 = await F.tmdbImdbId(todo[ti].mt, todo[ti].tid), had = F.getItem(tid0); if (had) F.setTmdbRef(tid0, todo[ti].mt, todo[ti].tid); else { var dd = detCache[tid0] || await F.details(tid0); detCache[tid0] = dd; F.setStatus(dd, 'want'); F.setTmdbRef(tid0, todo[ti].mt, todo[ti].tid); } okN++; }
+          catch (e) { failN++; if (e && /KEY|LIMIT|NETWORK/.test(String(e.code))) { ma.msg = { ok: false, text: F.describeError(e) }; break; } }
+        }
+        ma.busy = false; if (!ma.msg || ma.msg.ok) ma.msg = { ok: !failN, text: 'Додано в «Обрані»: ' + okN + (failN ? '. Не вдалося: ' + failN + ' (немає в OMDb).' : '.') }; renderSheet(); break;
+      }
       case 'showall': if (el.dataset.k === 'allNews' || el.dataset.k === 'allSoon') { ui[el.dataset.k] = !ui[el.dataset.k]; render(); } break;
       case 'moreshelves': ui.cat.shown[ui.homeMt] += 5; render(); break;
       case 'reshelf': { var rs = F.collDefs(ui.homeMt).filter(function (d) { return d.id === el.dataset.id; })[0]; if (rs) { delete ui.cat.sh[rs.id]; loadShelf(rs); paintShelf(rs); } break; }
@@ -852,6 +957,18 @@
         F.setStatus(fi, 'seen'); openSheet(fi.id); if (ui.sheet) { ui.sheet.stamp = true; renderSheet(); } toast('Переглянуто. Поставте оцінку'); break;
       }
       case 'yearimg': saveYearImage(Number(el.dataset.y)); break;
+      case 'baknow': case 'baklist': case 'bakrestore': {
+        var bk = ui.bak = ui.bak || {}; if (bk.busy) return;
+        if (el.dataset.act === 'bakrestore' && !window.confirm('Відновити записи з цієї копії? Теперішні записи залишаться.')) return;
+        bk.busy = true; bk.msg = { ok: true, text: el.dataset.act === 'baklist' ? 'Шукаємо копії…' : el.dataset.act === 'baknow' ? 'Зберігаємо…' : 'Відновлюємо…' }; render();
+        try {
+          if (el.dataset.act === 'baknow') { await F.backupNow(); bk.msg = { ok: true, text: 'Копію збережено в Google Диску.' }; bk.list = null; }
+          else if (el.dataset.act === 'baklist') { bk.list = await F.listBackups(); bk.msg = null; }
+          else { var rb = await F.restoreBackup(el.dataset.name); bk.msg = { ok: true, text: 'Відновлено. Додано: ' + rb.added + ', оновлено: ' + rb.updated + '.' }; }
+          bk.old = false;
+        } catch (e) { bk.msg = { ok: false, text: F.describeError(e) }; bk.old = !!(e && e.code === 'SYNC_OLD'); }
+        bk.busy = false; render(); break;
+      }
       case 'syncnow': {
         if (ui.syncBusy) return; ui.syncBusy = true; ui.syncMsg = { ok: true, text: 'Синхронізуємо…' }; render();
         try { var sr = await F.syncNow(); ui.syncMsg = { ok: true, text: 'Готово. Отримано нових: ' + sr.added + ', оновлено: ' + sr.updated + (sr.removed ? ', прибрано видалених: ' + sr.removed : '') + '.' }; }
@@ -938,6 +1055,12 @@
   }
   function onSubmit(form) {
     var kind = form.dataset.form;
+    if (kind === 'marq') {
+      var fc = ui.sheet && ui.sheet.coll && ui.sheet.coll.find; if (!fc || fc.busy) return; fc.q = form.elements.marq.value.trim(); if (fc.q.length < 2) return;
+      fc.busy = true; fc.err = ''; fc.res = null; renderSheet();
+      F.searchMarathons(fc.q).then(function (r) { fc.res = r; }, function (e) { fc.err = F.describeError(e); fc.res = []; }).then(function () { fc.busy = false; if (ui.sheet && ui.sheet.coll && ui.sheet.coll.find === fc) renderSheet(); });
+      return;
+    }
     if (kind === 'search') { ui.q = form.elements.q.value; hideSugg(); var qi = $('#q'); if (qi) qi.blur(); doSearch(false); }
     if (kind === 'tmdbkey') { F.setTmdbKey(form.elements.tmdbkey.value); ui.tmdbMsg = F.tmdbKeyOf() ? { ok: true, text: 'Ключ збережено. Натисніть «Перевірити ключ».' } : { ok: true, text: 'Ключ видалено.' }; render(); }
     if (kind === 'sync') { var okS = F.setSync(form.elements.syncurl.value, form.elements.synccode.value); ui.syncMsg = okS ? { ok: true, text: F.syncOf().url && F.syncOf().code ? 'Збережено. Натисніть «Синхронізувати».' : 'Збережено.' } : { ok: false, text: 'Це не схоже на адресу скрипта Google. Вона має закінчуватись на /exec.' }; render(); }
@@ -952,11 +1075,11 @@
     F.init();
     F.on(function () { render(); });
     // тиха синхронізація під час відкриття й коли додаток ховається
-    var autoSync = function () { var so = F.syncOf(); if (!so.url || !so.code || ui.syncBusy || FB.now() - so.at < 30000) return; ui.syncBusy = true; F.syncNow().then(function () { ui.syncBusy = false; render(); }, function () { ui.syncBusy = false; }); };
+    var autoSync = function () { var so = F.syncOf(); if (!so.url || !so.code || ui.syncBusy || FB.now() - so.at < 30000) return; ui.syncBusy = true; F.syncNow().then(function () { ui.syncBusy = false; render(); }, function () { ui.syncBusy = false; }).then(function () { return F.autoBackup(); }).then(function (r) { if (r && ui.tab === 'more') render(); }, function () { /* спробуємо наступного разу */ }); };
     try { ui.hideSeen = localStorage.getItem('kinoman_hide_seen') === '1'; } catch (e) { /* без збереження */ }
     var hv = ''; try { hv = localStorage.getItem('kinoman_home_view') || ''; } catch (e) { /* без збереження */ }
     // без збереженого вибору: «Моє», якщо там щось є, інакше каталог
-    ui.homeView = hv === 'mine' || hv === 'cat' ? hv : (F.list('watching').length || F.newEpisodes().length || F.newSeasons().length || F.upcoming().length || F.colList().length ? 'mine' : 'cat');
+    ui.homeView = hv === 'mine' || hv === 'cat' ? hv : (F.list('watching').length || F.newEpisodes().length || F.newSeasons().length || F.marathons().length || F.upcoming().length || F.colList().length ? 'mine' : 'cat');
     setTimeout(autoSync, 800);
     setTimeout(function () { if (F.tmdbKeyOf()) F.refreshSeries(6).then(function (n) { if (n) render(); }, function () { /* без інтернету */ }).then(function () { return F.fillTmdbIds(8); }).then(function (n) { if (n) render(); }, function () { /* без інтернету */ }); warmPosters(); }, 2500);
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') autoSync(); });

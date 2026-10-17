@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v18';
+  var VERSION = 'v19';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -23,7 +23,7 @@
   function on(f) { listeners.push(f); }
 
   // ---------- Стан ----------
-  function freshState() { return { v: 1, key: '', gemKey: '', tmdbKey: '', sync: { url: '', code: '', at: 0 }, tr: {}, items: {}, cols: {}, gone: {}, meta: { created: FB.now(), lastBackup: 0 } }; }
+  function freshState() { return { v: 1, key: '', gemKey: '', tmdbKey: '', sync: { url: '', code: '', at: 0, bak: 0 }, tr: {}, items: {}, cols: {}, gone: {}, mar: {}, meta: { created: FB.now(), lastBackup: 0 } }; }
   function imgPath(p) { p = String(p || ''); return /^\/[\w-]{5,60}\.(jpg|jpeg|png|webp)$/.test(p) ? p : ''; }
   function cleanCast(a) { return (Array.isArray(a) ? a : []).slice(0, 20).map(function (c) { return c && c.name ? { id: Math.max(0, Math.floor(Number(c.id) || 0)), name: String(c.name).slice(0, 80), character: String(c.character || '').slice(0, 100), photo: imgPath(c.photo) } : null; }).filter(Boolean); }
   function cleanSeasonEps(o) { var r = {}; if (o && typeof o === 'object') Object.keys(o).slice(0, 100).forEach(function (k) { var n = Math.floor(Number(o[k])); if (/^\d{1,3}$/.test(k) && Number(k) > 0 && n > 0 && n < 1000) r[k] = n; }); return r; }
@@ -49,7 +49,7 @@
       totalSeasons: Math.max(0, Math.min(100, Number(x.totalSeasons) || 0)),
       tmdbId: Number(x.tmdbId) > 0 ? Math.floor(Number(x.tmdbId)) : 0, mt: x.mt === 'tv' ? 'tv' : x.mt === 'movie' ? 'movie' : '', cast: cleanCast(x.cast), recs: cleanRecs(x.recs),
       titleUk: String(x.titleUk || '').slice(0, 200), plotUk: String(x.plotUk || '').slice(0, 2500),
-      trailer: /^[\w-]{11}$/.test(String(x.trailer || '')) ? String(x.trailer) : '', seasonEps: cleanSeasonEps(x.seasonEps), nextAir: cleanNextAir(x.nextAir), lastAir: cleanNextAir(x.lastAir), planAt: /^\d{4}-\d{2}-\d{2}$/.test(String(x.planAt || '')) ? String(x.planAt) : '', tvStatus: String(x.tvStatus || '').slice(0, 40), seasonAir: cleanSeasonAir(x.seasonAir), doneS: Math.max(0, Math.min(100, Math.floor(Number(x.doneS)) || 0)),
+      trailer: /^[\w-]{11}$/.test(String(x.trailer || '')) ? String(x.trailer) : '', seasonEps: cleanSeasonEps(x.seasonEps), nextAir: cleanNextAir(x.nextAir), lastAir: cleanNextAir(x.lastAir), planAt: /^\d{4}-\d{2}-\d{2}$/.test(String(x.planAt || '')) ? String(x.planAt) : '', tvStatus: String(x.tvStatus || '').slice(0, 40), arch: !!x.arch, tcoll: x.tcoll && Number(x.tcoll.id) > 0 && String(x.tcoll.name || '').trim() ? { id: Math.floor(Number(x.tcoll.id)), name: String(x.tcoll.name).trim().slice(0, 80) } : null, seasonAir: cleanSeasonAir(x.seasonAir), doneS: Math.max(0, Math.min(100, Math.floor(Number(x.doneS)) || 0)),
       xv: Number(x.xv) || 0, exAt: Number(x.exAt) || 0, cols: Array.isArray(x.cols) ? x.cols.map(String).filter(function (c) { return /^c[\w]{1,24}$/.test(c); }).slice(0, 50) : [],
       status: x.status === 'seen' ? 'seen' : x.status === 'watching' ? 'watching' : 'want', myRating: my, note: String(x.note || '').slice(0, 1000),
       addedAt: Number(x.addedAt) || 0, seenAt: Number(x.seenAt) || 0, updatedAt: Number(x.updatedAt) || 0, fetchedAt: Number(x.fetchedAt) || 0,
@@ -57,6 +57,8 @@
     };
   }
   function cleanCols(o) { var r = {}; if (o && typeof o === 'object') Object.keys(o).slice(0, 50).forEach(function (k) { var c = o[k]; if (/^c\w{1,24}$/.test(k) && c && String(c.name || '').trim()) r[k] = { name: String(c.name).trim().slice(0, 40), at: Number(c.at) || 0, upd: Number(c.upd) || Number(c.at) || 0, del: !!c.del }; }); return r; }
+  function cleanPart(p) { var id = Math.floor(Number(p && p.tid) || 0); return id > 0 && p.title ? { tid: id, mt: p.mt === 'tv' ? 'tv' : 'movie', title: String(p.title).slice(0, 120), year: /^\d{4}$/.test(String(p.year)) ? String(p.year) : '', poster: imgPath(p.poster) } : null; }
+  function cleanMar(o) { var r = {}; if (o && typeof o === 'object') Object.keys(o).slice(0, 100).forEach(function (k) { var m = o[k]; if (!/^m[\w-]{1,30}$/.test(k) || !m || !String(m.name || '').trim()) return; var seen = {}, parts = (Array.isArray(m.parts) ? m.parts : []).map(cleanPart).filter(function (p) { if (!p || seen[p.mt + p.tid]) return false; seen[p.mt + p.tid] = 1; return true; }).slice(0, 60); if (!parts.length && !m.del) return; r[k] = { name: String(m.name).trim().slice(0, 80), src: m.src === 'ai' ? 'ai' : 'tmdb', parts: parts, at: Number(m.at) || 0, upd: Number(m.upd) || Number(m.at) || 0, del: !!m.del }; }); return r; }
   function cleanGone(o) { var r = {}; if (o && typeof o === 'object') Object.keys(o).slice(0, 5000).forEach(function (k) { if (isId(k) && Number(o[k]) > 0) r[k] = Number(o[k]); }); return r; }
   function validSyncUrl(u) { u = String(u || '').trim(); return /^https:\/\/script\.google\.com\/macros\/s\/[\w-]{20,120}\/exec$/.test(u) ? u : ''; }
   function normalizeState(o) {
@@ -64,8 +66,8 @@
     s.key = typeof o.key === 'string' ? o.key.trim().slice(0, 64) : '';
     s.tmdbKey = typeof o.tmdbKey === 'string' ? o.tmdbKey.trim().slice(0, 600) : '';
     s.gemKey = typeof o.gemKey === 'string' ? o.gemKey.trim().slice(0, 200) : '';
-    if (o.sync && typeof o.sync === 'object') s.sync = { url: validSyncUrl(o.sync.url), code: String(o.sync.code || '').slice(0, 100), at: Number(o.sync.at) || 0 };
-    s.cols = cleanCols(o.cols); s.gone = cleanGone(o.gone);
+    if (o.sync && typeof o.sync === 'object') s.sync = { url: validSyncUrl(o.sync.url), code: String(o.sync.code || '').slice(0, 100), at: Number(o.sync.at) || 0, bak: Number(o.sync.bak) || 0 };
+    s.cols = cleanCols(o.cols); s.gone = cleanGone(o.gone); s.mar = cleanMar(o.mar);
     if (o.tr && typeof o.tr === 'object') Object.keys(o.tr).slice(0, 200).forEach(function (k) { var v = o.tr[k]; if (v && Array.isArray(v.titles)) s.tr[String(k).slice(0, 100)] = { titles: v.titles.map(function (x) { return String(x).slice(0, 120); }).filter(Boolean).slice(0, 3), year: /^\d{4}$/.test(String(v.year)) ? String(v.year) : '' }; });
     if (o.items && typeof o.items === 'object') Object.keys(o.items).slice(0, 5000).forEach(function (k) { var it = normalizeItem(o.items[k]); if (it) s.items[it.id] = it; });
     if (o.meta && typeof o.meta === 'object') { s.meta.created = Number(o.meta.created) || s.meta.created; s.meta.lastBackup = Number(o.meta.lastBackup) || 0; }
@@ -211,11 +213,12 @@
     var na = d.next_episode_to_air, la = d.last_episode_to_air;
     var tvx = mt === 'tv' ? { seasonEps: cleanSeasonEps(seasonEps), nextAir: na ? cleanNextAir({ date: na.air_date, s: na.season_number, e: na.episode_number, name: na.name }) : null, tvStatus: String(d.status || '') } : { seasonEps: {}, nextAir: null, tvStatus: '' };
     var lastAir = mt === 'tv' && la ? cleanNextAir({ date: la.air_date, s: la.season_number, e: la.episode_number, name: la.name }) : null;
-    return { xv: 3, seasonAir: mt === 'tv' ? cleanSeasonAir(seasonAir) : {}, lastAir: lastAir, trailer: vids[0] ? vids[0].key : '', seasonEps: tvx.seasonEps, nextAir: tvx.nextAir, tvStatus: tvx.tvStatus, tmdbId: hit.id, mt: mt, titleUk: title && title !== it.title && /[Ѐ-ӿ]/.test(title) ? title : '', plotUk: /[Ѐ-ӿ]/.test(String(d.overview || '')) ? String(d.overview).trim().slice(0, 2500) : '', cast: cast, recs: recs };
+    var bc = mt === 'movie' && d.belongs_to_collection && d.belongs_to_collection.id > 0 && d.belongs_to_collection.name ? { id: Math.floor(d.belongs_to_collection.id), name: clean(d.belongs_to_collection.name).slice(0, 80) } : null;
+    return { xv: 3, tcoll: bc, seasonAir: mt === 'tv' ? cleanSeasonAir(seasonAir) : {}, lastAir: lastAir, trailer: vids[0] ? vids[0].key : '', seasonEps: tvx.seasonEps, nextAir: tvx.nextAir, tvStatus: tvx.tvStatus, tmdbId: hit.id, mt: mt, titleUk: title && title !== it.title && /[Ѐ-ӿ]/.test(title) ? title : '', plotUk: /[Ѐ-ӿ]/.test(String(d.overview || '')) ? String(d.overview).trim().slice(0, 2500) : '', cast: cast, recs: recs };
   }
   function setExtras(id, ex) {
     var it = S.items[id]; if (!it || !ex || ex.none) return;
-    it.tmdbId = ex.tmdbId; it.mt = ex.mt; it.cast = ex.cast; it.recs = ex.recs; it.trailer = ex.trailer || ''; it.seasonEps = ex.seasonEps || {}; it.nextAir = ex.nextAir || null; it.lastAir = ex.lastAir || null; it.tvStatus = ex.tvStatus || ''; it.seasonAir = ex.seasonAir || {}; it.xv = ex.xv || 0; it.exAt = FB.now();
+    it.tmdbId = ex.tmdbId; it.mt = ex.mt; it.cast = ex.cast; it.recs = ex.recs; it.trailer = ex.trailer || ''; it.seasonEps = ex.seasonEps || {}; it.nextAir = ex.nextAir || null; it.lastAir = ex.lastAir || null; it.tvStatus = ex.tvStatus || ''; it.seasonAir = ex.seasonAir || {}; it.tcoll = ex.tcoll || null; it.xv = ex.xv || 0; it.exAt = FB.now();
     if (it.status === 'seen' && it.type === 'series' && !it.doneS) it.doneS = airedSeason(it, it.seenAt);
     if (ex.titleUk && !it.titleUk) it.titleUk = ex.titleUk;
     if (ex.plotUk && !it.plotUk) it.plotUk = ex.plotUk;
@@ -555,7 +558,7 @@
   function setStatus(fresh, status) {
     if (status !== 'want' && status !== 'seen' && status !== 'watching') return null;
     var it = S.items[fresh.id] ? S.items[fresh.id] : addOrUpdate(fresh, status);
-    if (it.status !== status) { it.status = status; it.seenAt = status === 'seen' ? FB.now() : 0; if (status === 'seen' && it.type === 'series') it.doneS = airedSeason(it, 0); it.updatedAt = stamp(it.updatedAt); save(); }
+    if (it.status !== status) { it.arch = false; it.status = status; it.seenAt = status === 'seen' ? FB.now() : 0; if (status === 'seen' && it.type === 'series') it.doneS = airedSeason(it, 0); it.updatedAt = stamp(it.updatedAt); save(); }
     return it;
   }
   function setMyRating(id, n) {
@@ -610,16 +613,24 @@
   }
   function watchedCount(it) { return Object.keys(it.watched).length; }
 
-  var SORTS = { added: 'Нещодавно додані', seen: 'Нещодавно переглянуті', title: 'За назвою', year: 'За роком', imdb: 'За рейтингом IMDb', mine: 'За моєю оцінкою' };
+  var SORTS = { added: 'Нещодавно додані', old: 'Давно додані', seen: 'Нещодавно переглянуті', title: 'За назвою', year: 'За роком', imdb: 'За рейтингом IMDb', mine: 'За моєю оцінкою', short: 'Спершу коротші' };
+  var SORTS_FOR = { want: ['added', 'old', 'imdb', 'short', 'title', 'year'], watching: ['added', 'old', 'imdb', 'title', 'year'], seen: ['seen', 'mine', 'imdb', 'short', 'title', 'year'] };
+  function oldCount(status) { return list(status, { old: true }).length; }
+  // Архів: прибрати зі списків, не видаляючи
+  function setArch(id, on) { var it = S.items[id]; if (!it || it.arch === !!on) return; it.arch = !!on; it.updatedAt = stamp(it.updatedAt); save(); }
+  function archived() { return Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { return it.arch; }).sort(function (a, b) { return b.updatedAt - a.updatedAt; }); }
   function yearNum(it) { var m = /\d{4}/.exec(it.year); return m ? Number(m[0]) : 0; }
   function list(status, o) {
     o = o || {};
-    var arr = Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { return it.status === status; });
+    var arr = Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { return it.status === status && (o.arch === true || !it.arch); });
+    if (o.old) { var yAgo = FB.now() - 365 * 86400000; arr = arr.filter(function (it) { return it.addedAt > 0 && it.addedAt < yAgo; }); }
     if (o.type === 'movie' || o.type === 'series') arr = arr.filter(function (it) { return it.type === o.type; });
     if (o.genre) arr = arr.filter(function (it) { return it.genre.indexOf(o.genre) >= 0; });
     if (o.time) arr = arr.filter(function (it) { var m = it.runtime; if (!m) return false; return o.time === '90' ? m <= 90 : o.time === '120' ? m > 90 && m <= 120 : m > 120; });
     var cmp = {
       added: function (a, b) { return b.addedAt - a.addedAt; },
+      old: function (a, b) { return a.addedAt - b.addedAt; },
+      short: function (a, b) { return (a.runtime || 1e6) - (b.runtime || 1e6) || b.addedAt - a.addedAt; },
       seen: function (a, b) { return b.seenAt - a.seenAt || b.addedAt - a.addedAt; },
       title: function (a, b) { return a.title.localeCompare(b.title, 'uk'); },
       year: function (a, b) { return yearNum(b) - yearNum(a); },
@@ -634,7 +645,7 @@
   }
   function randomPick(status, o) { var a = list(status, o); return a.length ? a[Math.floor(Math.random() * a.length)] : null; }
   function stats() {
-    var seen = list('seen'), want = list('want'), watching = list('watching'); var rated = seen.filter(function (it) { return it.myRating; });
+    var seen = list('seen', { arch: true }), want = list('want'), watching = list('watching'); var rated = seen.filter(function (it) { return it.myRating; });
     var minutes = 0;
     seen.forEach(function (it) { if (it.type === 'series') minutes += watchedCount(it) * (it.runtime || 0); else minutes += it.runtime || 0; });
     var g = genres('seen').slice(0, 3);
@@ -707,12 +718,12 @@
   function upcoming() {
     var today = ymd(FB.now()), out = [];
     Object.keys(S.items).forEach(function (k) {
-      var it = S.items[k];
+      var it = S.items[k]; if (it.arch) return;
       if (it.status === 'seen') { var nx = it.nextAir; if (it.type === 'series' && it.doneS && nx && nx.s > it.doneS && nx.date >= today && daysBetween(today, nx.date) <= 365) out.push({ item: it, date: nx.date, label: nx.e > 1 ? 'S' + nx.s + 'E' + nx.e : 'Сезон ' + nx.s }); return; }
       if (it.type === 'series') { var na = it.nextAir; if (na && na.date >= today && daysBetween(today, na.date) <= 180) out.push({ item: it, date: na.date, label: na.s ? 'S' + na.s + 'E' + na.e : 'Нова серія' }); }
       else if (it.status === 'want') { var r = releasedIso(it.released); if (r && r >= today && daysBetween(today, r) <= 365) out.push({ item: it, date: r, label: 'Прем’єра' }); }
     });
-    Object.keys(S.items).forEach(function (k) { var it = S.items[k]; if (it.status !== 'seen' && it.planAt && it.planAt >= today) out.push({ item: it, date: it.planAt, label: it.planAt === today ? 'Заплановано на сьогодні' : 'Заплановано' }); });
+    Object.keys(S.items).forEach(function (k) { var it = S.items[k]; if (!it.arch && it.status !== 'seen' && it.planAt && it.planAt >= today) out.push({ item: it, date: it.planAt, label: it.planAt === today ? 'Заплановано на сьогодні' : 'Заплановано' }); });
     return out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; }).slice(0, 15);
   }
   var refreshing = false;
@@ -720,7 +731,7 @@
   async function refreshSeries(max) {
     if (refreshing || !tmdbKeyOf()) return 0; refreshing = true; var n = 0;
     try {
-      var due = Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { if (it.type !== 'series') return false; if (it.status === 'seen') return !/^(Ended|Canceled)$/.test(it.tvStatus) && FB.now() - it.exAt > 86400000; return FB.now() - it.exAt > 21600000; }).sort(function (a, b) { return (a.status === 'seen') - (b.status === 'seen'); }).slice(0, max || 12);
+      var due = Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { if (it.type !== 'series' || it.arch) return false; if (it.status === 'seen') return !/^(Ended|Canceled)$/.test(it.tvStatus) && FB.now() - it.exAt > 86400000; return FB.now() - it.exAt > 21600000; }).sort(function (a, b) { return (a.status === 'seen') - (b.status === 'seen'); }).slice(0, max || 12);
       for (var i = 0; i < due.length; i++) {
         try { var ex = await tmdbExtras(due[i]); if (ex && !ex.none && S.items[due[i].id]) { setExtras(due[i].id, ex); n++; } else if (S.items[due[i].id]) S.items[due[i].id].exAt = FB.now(); }
         catch (e) { if (e && (e.code === 'TMDB_NETWORK' || (e.code === 'TMDB_HTTP' && e.status === 401))) break; }
@@ -744,7 +755,7 @@
 
   // ---------- Рекорди ----------
   function records() {
-    var seen = list('seen'), all = Object.keys(S.items).map(function (k) { return S.items[k]; }), r = [];
+    var seen = list('seen', { arch: true }), all = Object.keys(S.items).map(function (k) { return S.items[k]; }), r = [];
     var ser = all.filter(function (it) { return it.type === 'series' && watchedCount(it) > 0; }).sort(function (a, b) { return watchedCount(b) - watchedCount(a); })[0];
     if (ser) r.push({ k: 'Найдовший серіал', v: (ser.titleUk || ser.title), n: watchedCount(ser) + ' серій' });
     var mv = seen.filter(function (it) { return it.type !== 'series' && it.runtime; }).sort(function (a, b) { return b.runtime - a.runtime; })[0];
@@ -762,7 +773,7 @@
 
   // ---------- Графіки статистики ----------
   function charts() {
-    var seen = list('seen').filter(function (it) { return it.seenAt; }), now = new Date(FB.now());
+    var seen = list('seen', { arch: true }).filter(function (it) { return it.seenAt; }), now = new Date(FB.now());
     var yr = {}; seen.forEach(function (it) { var y = new Date(it.seenAt).getFullYear(); yr[y] = (yr[y] || 0) + 1; });
     var years = Object.keys(yr).map(Number).sort(function (a, b) { return a - b; }).slice(-6).map(function (y) { return { k: String(y), n: yr[y] }; });
     var months = [], MS = ['січ', 'лют', 'бер', 'кві', 'тра', 'чер', 'лип', 'сер', 'вер', 'жов', 'лис', 'гру'];
@@ -780,7 +791,7 @@
   // ---------- Підсумок року ----------
   function yearStats(y) {
     var from = new Date(y, 0, 1).getTime(), to = new Date(y + 1, 0, 1).getTime();
-    var seen = list('seen').filter(function (it) { return it.seenAt >= from && it.seenAt < to; });
+    var seen = list('seen', { arch: true }).filter(function (it) { return it.seenAt >= from && it.seenAt < to; });
     var minutes = 0; seen.forEach(function (it) { minutes += it.type === 'series' ? watchedCount(it) * (it.runtime || 0) : (it.runtime || 0); });
     var gm = {}; seen.forEach(function (it) { it.genre.forEach(function (g) { gm[g] = (gm[g] || 0) + 1; }); });
     var genres = Object.keys(gm).sort(function (a, b) { return gm[b] - gm[a] || a.localeCompare(b); }).slice(0, 3);
@@ -789,14 +800,80 @@
   }
 
   // ---------- Синхронізація через ваш Google Apps Script ----------
-  function syncOf() { return { url: S.sync.url, code: S.sync.code, at: S.sync.at }; }
+  function syncOf() { return { url: S.sync.url, code: S.sync.code, at: S.sync.at, bak: S.sync.bak }; }
+  // Резервні копії в Google Диску (через той самий скрипт)
+  var BAK_EVERY = 7 * 86400000;
+  async function backupNow() {
+    if (!S.sync.url || !S.sync.code) throw err('NEED_SYNC');
+    var o = await syncCall({ action: 'backup', code: S.sync.code, data: payload() });
+    S.sync.bak = FB.now(); save(true); return { name: String(o.name || '') };
+  }
+  function backupDue() { return !!(S.sync.url && S.sync.code && FB.now() - S.sync.bak > BAK_EVERY); }
+  async function autoBackup() { if (!backupDue()) return null; return backupNow(); }
+  async function listBackups() {
+    if (!S.sync.url || !S.sync.code) throw err('NEED_SYNC');
+    var o = await syncCall({ action: 'backups', code: S.sync.code });
+    return (Array.isArray(o.list) ? o.list : []).filter(function (x) { return x && /^kinoman-\d{4}-\d{2}-\d{2}\.json$/.test(String(x.name)); }).map(function (x) { return { name: String(x.name), date: String(x.name).slice(8, 18), at: Number(x.at) || 0, size: Number(x.size) || 0 }; }).slice(0, 20);
+  }
+  async function restoreBackup(name) {
+    if (!/^kinoman-\d{4}-\d{2}-\d{2}\.json$/.test(String(name))) throw err('BAK_NOFILE');
+    var o = await syncCall({ action: 'restore', code: S.sync.code, name: name });
+    var r = importJSON(JSON.stringify(o.data || {})); if (r.error) throw err('SYNC_BAD'); return r;
+  }
   function setSync(url, code) { var u = validSyncUrl(url); if (String(url || '').trim() && !u) return false; S.sync.url = u; S.sync.code = String(code || '').trim().slice(0, 100); save(); return true; }
-  function payload() { return { app: 'kino', v: 2, exportedAt: FB.now(), items: S.items, cols: S.cols, gone: S.gone }; }
+  function payload() { return { app: 'kino', v: 2, exportedAt: FB.now(), items: S.items, cols: S.cols, gone: S.gone, mar: S.mar }; }
   // Злиття: виграє новіше; видалення пам’ятаються, щоб не воскресали
+  function mergeMar(m) { var mm = cleanMar(m); Object.keys(mm).forEach(function (k) { var x = mm[k], ex = S.mar[k]; if (!ex || x.upd > ex.upd) S.mar[k] = x; }); }
+  // ---------- Кіномарафони ----------
+  function partOf(r, mt) { return cleanPart({ tid: r.id, mt: mt, title: clean(r.title || r.name), year: yearOf(r.release_date || r.first_air_date), poster: r.poster_path }); }
+  function collName(n) { return clean(n).replace(/\s*\((Колекція|Collection)\)\s*$/i, '').replace(/^Колекція\s+/i, '').replace(/\s+Collection$/i, '').slice(0, 80); }
+  async function tmdbCollection(cid) {
+    cid = Math.floor(Number(cid)); if (!(cid > 0)) throw err('TMDB_HTTP');
+    var d = await tmdb('/collection/' + cid, { language: 'uk-UA' });
+    var parts = (Array.isArray(d.parts) ? d.parts : []).slice().sort(function (a, b) { var x = a.release_date || '9999', y = b.release_date || '9999'; return x < y ? -1 : x > y ? 1 : 0; }).map(function (r) { return partOf(r, 'movie'); }).filter(Boolean);
+    return { key: 'mt' + cid, name: collName(d.name) || 'Кіномарафон', src: 'tmdb', parts: parts };
+  }
+  async function searchMarathons(q) {
+    q = clean(q).slice(0, 80); if (q.length < 2) return [];
+    var d = await tmdb('/search/collection', { query: q, language: 'uk-UA', page: 1 });
+    return (Array.isArray(d.results) ? d.results : []).filter(function (r) { return r && r.id > 0 && clean(r.name); }).slice(0, 6).map(function (r) { return { cid: Math.floor(r.id), name: collName(r.name) || clean(r.name).slice(0, 80), poster: imgPath(r.poster_path) }; });
+  }
+  async function aiMarathon(q) {
+    q = clean(q).slice(0, 120); if (q.length < 2) return null;
+    var o = await geminiJson('Склади кіномарафон для глядача з України за запитом: «' + q + '». Перелічи фільми й серіали франшизи в найкращому порядку перегляду (якщо просять хронологічно — за подіями сюжету, інакше — за виходом). Лише реально існуючі назви, до 40 позицій, без анонсованих, що ще не вийшли. Дай коротку назву марафону українською.',
+      { type: 'OBJECT', properties: { name: { type: 'STRING' }, items: { type: 'ARRAY', items: { type: 'OBJECT', properties: { title: { type: 'STRING' }, original_title: { type: 'STRING' }, year: { type: 'STRING' }, type: { type: 'STRING' } }, required: ['title', 'original_title', 'year', 'type'] } } }, required: ['name', 'items'] });
+    var want = (Array.isArray(o.items) ? o.items : []).slice(0, 40).map(function (x) { return { title: clean(x.title).slice(0, 120), orig: clean(x.original_title).slice(0, 120), year: /^\d{4}/.test(String(x.year)) ? String(x.year).slice(0, 4) : '', mt: x.type === 'tv' ? 'tv' : 'movie' }; }).filter(function (x) { return x.title || x.orig; });
+    var found = new Array(want.length), next = 0;
+    async function worker() { while (next < want.length) { var i = next++; try { found[i] = await findTmdb(want[i]); } catch (e) { found[i] = null; } } }
+    await Promise.all([worker(), worker(), worker()]);
+    var seen = {}, parts = [];
+    found.forEach(function (h) { if (!h || seen[h.mt + h.tid]) return; seen[h.mt + h.tid] = 1; var p = cleanPart({ tid: h.tid, mt: h.mt, title: h.title, year: h.year, poster: h.poster }); if (p) parts.push(p); });
+    return { key: '', name: clean(o.name).slice(0, 80) || q, src: 'ai', parts: parts, missed: want.length - parts.length };
+  }
+  function saveMarathon(m) {
+    if (!m || !m.parts || !m.parts.length) return null;
+    var id = m.key && /^m[\w-]{1,30}$/.test(m.key) ? m.key : 'ma' + FB.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+    var t = FB.now(), ex = S.mar[id];
+    S.mar[id] = cleanMar((function () { var o = {}; o[id] = { name: m.name, src: m.src, parts: m.parts, at: ex && !ex.del ? ex.at : t, upd: stamp(ex && ex.upd), del: false }; return o; })())[id];
+    save(); return id;
+  }
+  function removeMarathon(id) { var m = S.mar[id]; if (!m) return; m.del = true; m.upd = stamp(m.upd); save(); }
+  function marathonOf(id) { var m = S.mar[id]; return m && !m.del ? progressOf(id, m) : null; }
+  function progressOf(id, m) {
+    var parts = m.parts.map(function (p, i) { return { tid: p.tid, mt: p.mt, title: p.title, year: p.year, poster: p.poster, rank: i + 1, st: tmdbStatus(p.mt, p.tid) }; });
+    var done = parts.filter(function (p) { return p.st === 'seen'; }).length, nxt = null;
+    for (var i = 0; i < parts.length && !nxt; i++) if (parts[i].st !== 'seen') nxt = parts[i];
+    return { id: id, name: m.name, src: m.src, parts: parts, done: done, total: parts.length, next: nxt, upd: m.upd };
+  }
+  function marathons() {
+    return Object.keys(S.mar).filter(function (k) { return !S.mar[k].del; }).map(function (k) { return progressOf(k, S.mar[k]); })
+      .sort(function (a, b) { return (a.done === a.total) - (b.done === b.total) || b.upd - a.upd; });
+  }
   function mergeIn(o) {
     var added = 0, updated = 0, removed = 0;
     var gone = cleanGone(o.gone); Object.keys(gone).forEach(function (k) { if (!(S.gone[k] >= gone[k])) S.gone[k] = gone[k]; });
     var cols = cleanCols(o.cols); Object.keys(cols).forEach(function (k) { var c = cols[k], ex = S.cols[k]; if (!ex || c.upd > ex.upd) S.cols[k] = c; });
+    mergeMar(o.mar);
     if (o.items && typeof o.items === 'object') Object.keys(o.items).slice(0, 5000).forEach(function (k) {
       var n = normalizeItem(o.items[k]); if (!n) return; var ex = S.items[n.id];
       if (S.gone[n.id] && S.gone[n.id] >= n.updatedAt) return;
@@ -809,7 +886,7 @@
     var res; try { res = await FB.fetch(S.sync.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body), redirect: 'follow' }); } catch (e) { throw err('SYNC_NETWORK'); }
     if (!res.ok) { var e1 = err('SYNC_HTTP'); e1.status = res.status; throw e1; }
     var o; try { o = await res.json(); } catch (e2) { throw err('SYNC_BAD'); }
-    if (!o || o.ok !== true) { var e3 = err(o && o.error === 'code' ? 'SYNC_CODE' : 'SYNC_BAD'); throw e3; }
+    if (!o || o.ok !== true) { var e3 = err(o && o.error === 'code' ? 'SYNC_CODE' : o && o.error === 'action' ? 'SYNC_OLD' : o && o.error === 'nofile' ? 'BAK_NOFILE' : 'SYNC_BAD'); throw e3; }
     return o;
   }
   async function syncNow() {
@@ -823,6 +900,8 @@
   function describeSyncError(e) {
     var c = e && e.code;
     if (c === 'NEED_SYNC') return 'Вставте адресу скрипта й секретне слово.';
+    if (c === 'SYNC_OLD') return 'Скрипт у Google ще старої версії, без резервних копій. Оновіть його за інструкцією нижче.';
+    if (c === 'BAK_NOFILE') return 'Цієї копії вже немає в Google Диску.';
     if (c === 'SYNC_NETWORK') return 'Немає зв’язку зі скриптом Google. Перевірте інтернет і чи скрипт розгорнуто для «Усі».';
     if (c === 'SYNC_CODE') return 'Секретне слово не збігається з тим, що в скрипті.';
     if (c === 'SYNC_HTTP') return 'Google повернув помилку (код ' + e.status + '). Перевірте, що скрипт розгорнуто як вебзастосунок.';
@@ -845,6 +924,7 @@
       if (!ex) { S.items[n.id] = n; delete S.gone[n.id]; added++; } else if (n.updatedAt > ex.updatedAt) { S.items[n.id] = n; updated++; }
     });
     var cols = cleanCols(o.cols); Object.keys(cols).forEach(function (k) { var c = cols[k], ex = S.cols[k]; if (!ex || c.upd > ex.upd) S.cols[k] = c; });
+    mergeMar(o.mar);
     save(); return { added: added, updated: updated };
   }
 
@@ -852,6 +932,9 @@
     VERSION: VERSION, init: init, on: on, save: save, isSaveFailed: function () { return saveFailed; },
     newEpisodes: newEpisodes, newSeasons: newSeasons, hasNewSeason: hasNewSeason, skipSeason: skipSeason, markEpisodeSeen: markEpisodeSeen, upcoming: upcoming, refreshSeries: refreshSeries, duoPick: duoPick, records: records, ymd: ymd,
     discover: discover, person: person, advise: advise, findTmdb: findTmdb, colList: colList, addCol: addCol, renameCol: renameCol, removeCol: removeCol, toggleCol: toggleCol, colItems: colItems, nextForMe: nextForMe, epCode: epCode, yearStats: yearStats, syncOf: syncOf, setSync: setSync, syncNow: syncNow, mergeIn: mergeIn,
+    collName: collName, tmdbCollection: tmdbCollection, searchMarathons: searchMarathons, aiMarathon: aiMarathon, saveMarathon: saveMarathon, removeMarathon: removeMarathon, marathons: marathons, marathonOf: marathonOf,
+    setArch: setArch, archived: archived, oldCount: oldCount, SORTS_FOR: SORTS_FOR,
+    backupNow: backupNow, backupDue: backupDue, autoBackup: autoBackup, listBackups: listBackups, restoreBackup: restoreBackup,
     keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
     getItem: getItem, setStatus: setStatus, setMyRating: setMyRating, setNote: setNote, removeItem: removeItem, restoreItem: restoreItem, refresh: refresh,
     toggleEpisode: toggleEpisode, setSeasonWatched: setSeasonWatched, seasonProgress: seasonProgress, watchedCount: watchedCount,
