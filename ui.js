@@ -5,13 +5,14 @@
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var app, tabsEl, sheetRoot, toastEl;
   var ui = {
-    tab: 'search',
+    tab: 'home', homeMt: 'movie', cat: { data: {}, loading: false, error: null, token: 0 },
     q: '', type: '', results: [], total: 0, page: 0, loading: false, searched: false, error: null, token: 0,
-    lists: { want: { sort: 'added', type: '', genre: '' }, seen: { sort: 'seen', type: '', genre: '' } },
-    busy: {}, stack: [], sheet: null, tmdbMsg: null, keyMsg: null, backupMsg: null
+    lists: { want: { sort: 'added', type: '', genre: '' }, watching: { sort: 'added', type: '', genre: '' }, seen: { sort: 'seen', type: '', genre: '' } },
+    busy: {}, stack: [], sheet: null, enter: false, tmdbMsg: null, keyMsg: null, backupMsg: null
   };
   var detCache = {};
-  var TABS = [['search', 'Пошук', 'search'], ['want', 'Хочу', 'bookmark'], ['seen', 'Переглянуто', 'eye'], ['more', 'Ще', 'more']];
+  var TABS = [['home', 'Головна', 'home'], ['search', 'Пошук', 'search'], ['want', 'Обрані', 'heart'], ['watching', 'Дивлюсь', 'play'], ['seen', 'Переглянуто', 'eye'], ['more', 'Ще', 'more']];
+  var NAMES = { want: 'Обрані', watching: 'Дивлюсь', seen: 'Переглянуто' };
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function ic(n, c) { return '<svg class="ic ' + (c || '') + '" aria-hidden="true"><use href="#i-' + n + '"/></svg>'; }
@@ -42,8 +43,8 @@
   function rowHtml(r) {
     var lib = F.getItem(r.id), busy = ui.busy[r.id];
     var acts;
-    if (lib) acts = '<button class="chip on" data-act="open" data-id="' + r.id + '">' + ic('check', 'sm') + (lib.status === 'seen' ? 'Бачив' : 'Хочу') + '</button>';
-    else acts = '<button class="chip" data-act="quick" data-st="want" data-id="' + r.id + '"' + (busy ? ' disabled' : '') + '>' + ic('plus', 'sm') + 'Хочу</button><button class="chip" data-act="quick" data-st="seen" data-id="' + r.id + '"' + (busy ? ' disabled' : '') + '>' + ic('eye', 'sm') + 'Бачив</button>';
+    if (lib) acts = '<button class="chip on" data-act="open" data-id="' + r.id + '">' + ic('check', 'sm') + (lib.status === 'seen' ? 'Бачив' : lib.status === 'watching' ? 'Дивлюсь' : 'В обраному') + '</button>';
+    else acts = [['want', 'plus', 'В обране'], ['watching', 'play', 'Дивлюсь'], ['seen', 'eye', 'Бачив']].map(function (c) { return '<button class="chip" data-act="quick" data-st="' + c[0] + '" data-id="' + r.id + '"' + (busy ? ' disabled' : '') + '>' + ic(c[1], 'sm') + c[2] + '</button>'; }).join('');
     return '<div class="row glow" style="--h:' + hue(r.id) + '"><button class="open" data-act="open" data-id="' + r.id + '">' + posterHtml(r.poster, r.title) + '<span class="txt"><span class="t">' + esc(r.title) + '</span><span class="m">' + esc(typeLabel(r.type)) + (r.year ? ', ' + esc(r.year) : '') + '</span></span></button><div class="acts">' + acts + '</div></div>';
   }
   function featureHtml() {
@@ -55,12 +56,58 @@
     if (r.imdb != null) pills += '<span class="pill">IMDb ' + r.imdb.toFixed(1) + '</span>';
     if (r.rt != null) pills += '<span class="pill rt' + (r.rt >= 60 ? ' good' : '') + '">' + r.rt + '%</span>';
     if (r.meta != null) pills += '<span class="pill mt">MC ' + r.meta + '</span>';
-    return '<section class="feature glow" style="--h:' + hue(it.id) + '" aria-label="Що подивитись"><div class="bg" style="' + (it.poster ? 'background-image:url(\'' + esc(it.poster) + '\')' : '') + '"></div><div class="in">' + posterHtml(it.poster, it.title) +
-      '<div class="tx"><div class="lbl">Що подивитись сьогодні</div><h3>' + esc(it.titleUk || it.title) + '</h3><div class="meta">' + esc(typeLabel(it.type)) + (it.year ? ', ' + esc(it.year) : '') + (it.runtime ? ', ' + esc(F.fmtMinutes(it.runtime)) : '') + '</div>' + (pills ? '<div class="rates">' + pills + '</div>' : '') +
-      '<div class="acts"><button class="btn sm" data-act="open" data-id="' + it.id + '">Відкрити</button>' + (want.length > 1 ? '<button class="btn ghost sm" data-act="rehero" aria-label="Інший фільм">' + ic('shuffle', 'sm') + 'Інший</button>' : '') + '</div></div></div></section>';
+    return '<section class="feature glow" style="--h:' + hue(it.id) + '" aria-label="Що подивитись"><div class="bg" style="' + (it.poster ? 'background-image:url(\'' + esc(it.poster) + '\')' : '') + '"></div><div class="beam"></div><div class="in">' + posterHtml(it.poster, it.title) +
+      '<div class="lbl">Що подивитись сьогодні</div><h3>' + esc(it.titleUk || it.title) + '</h3><div class="meta">' + esc(typeLabel(it.type)) + (it.year ? ', ' + esc(it.year) : '') + (it.runtime ? ', ' + esc(F.fmtMinutes(it.runtime)) : '') + '</div>' + (pills ? '<div class="rates">' + pills + '</div>' : '') +
+      '<div class="acts"><button class="btn" data-act="open" data-id="' + it.id + '">Відкрити</button>' + (want.length > 1 ? '<button class="btn ghost" data-act="rehero" aria-label="Інший фільм">' + ic('shuffle', 'sm') + 'Інший</button>' : '') + '</div></div></section>';
+  }
+  function tileHtml(it, i) {
+    var r = it.ratings, b = '';
+    if (it.myRating) b = '<span class="badge"><span class="me">' + it.myRating + '</span></span>';
+    else if (r.imdb != null) b = '<span class="badge"><span>' + r.imdb.toFixed(1) + '</span></span>';
+    return '<button class="tile glow" style="--h:' + hue(it.id) + ';--i:' + i + '" data-act="open" data-id="' + it.id + '"><span class="poster"><span class="ph">' + esc(it.titleUk || it.title) + '</span>' + (it.poster ? '<img src="' + esc(it.poster) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '') + b + '</span><span class="name">' + esc(it.titleUk || it.title) + '</span></button>';
+  }
+  function shelfHtml(title, items, tab) {
+    if (!items.length) return '';
+    return '<section class="shelf"><div class="shelf-h"><h2>' + esc(title) + '</h2><button class="more-link" data-act="tab" data-tab="' + tab + '">Усі ' + F.list(tab).length + '</button></div><div class="strip">' + items.map(tileHtml).join('') + '</div></section>';
+  }
+  function catTile(r) {
+    return '<button class="tile glow" style="--h:' + hue(r.tid) + '" data-act="cat" data-mt="' + r.mt + '" data-tid="' + r.tid + '" data-title="' + esc(r.title) + '" data-year="' + esc(r.year) + '" data-poster="' + esc(r.poster) + '"><span class="poster"><span class="ph">' + esc(r.title) + '</span><img src="' + esc(F.tmdbImg(r.poster, 'w342')) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' + (r.vote ? '<span class="badge"><span class="tm">★ ' + r.vote.toFixed(1) + '</span></span>' : '') + '</span><span class="name">' + esc(r.title) + '</span><span class="yr">' + esc(r.year) + '</span></button>';
+  }
+  function catShelf(title, items) {
+    if (!items || !items.length) return '';
+    return '<section class="shelf"><div class="shelf-h"><h2>' + esc(title) + '</h2></div><div class="strip">' + items.map(catTile).join('') + '</div></section>';
+  }
+  function renderHome() {
+    var kk = F.tmdbKeyOf(); if (ui.cat.forKey !== kk) { ui.cat.forKey = kk; ui.cat.data = {}; ui.cat.error = null; ui.cat.loading = false; ui.cat.token++; }
+    var h = '<div class="page-h"><h1 class="logo"><i></i>Кіноман</h1></div>';
+    h += featureHtml();
+    h += shelfHtml('Дивлюсь зараз', F.list('watching').slice(0, 12), 'watching');
+    h += shelfHtml('Обрані', F.list('want').filter(function (x) { return x.id !== ui.heroId; }).slice(0, 12), 'want');
+    h += '<div class="seg cat-seg" role="group" aria-label="Каталог">' + [['movie', 'Фільми'], ['tv', 'Серіали']].map(function (t) { return '<button type="button" data-act="hometype" data-mt="' + t[0] + '" aria-pressed="' + (ui.homeMt === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
+    var mt = ui.homeMt, d = ui.cat.data[mt];
+    if (!F.tmdbKeyOf()) {
+      h += '<div class="notice">' + ic('film') + '<div><b>Каталог потребує ключ TMDB</b><div class="sub">З ним тут з’являться добірки: що в тренді, що йде в кіно, найвище оцінені. Ключ безкоштовний, його вставляють у розділі «Ще».</div><p style="margin:10px 0 0"><button class="btn sm" data-act="tab" data-tab="more">Додати ключ TMDB</button></p></div></div>';
+    } else if (d) {
+      var names = [['trending', 'У тренді цього тижня'], ['now', mt === 'tv' ? 'Виходять зараз' : 'Зараз у кінотеатрах'], ['top', 'Найвище оцінені'], ['popular', 'Популярні']];
+      h += names.map(function (n) { return catShelf(n[1], d[n[0]]); }).join('');
+      if (!names.some(function (n) { return d[n[0]] && d[n[0]].length; })) h += emptyHtml('film', 'Каталог порожній', 'TMDB не повернув жодного фільму. Спробуйте пізніше.');
+    } else if (ui.cat.error) {
+      h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(ui.cat.error)) + '<p style="margin:10px 0 0"><button class="btn sm" data-act="retrycat">Спробувати ще раз</button></p></div></div>';
+    } else h += '<div class="spin" role="status" aria-label="Завантажуємо каталог"></div>';
+    return h;
+  }
+  async function loadCat() {
+    var mt = ui.homeMt, c = ui.cat; if (c.loading || c.data[mt] || c.error || !F.tmdbKeyOf()) return;
+    var tok = ++c.token; c.loading = true;
+    try {
+      var kinds = ['trending', 'now', 'top', 'popular'], res = await Promise.all(kinds.map(function (k) { return F.catalog(k, mt); })), o = {};
+      kinds.forEach(function (k, i) { o[k] = res[i]; });
+      if (tok !== c.token) return; c.data[mt] = o;
+    } catch (e) { if (tok !== c.token) return; c.error = e; }
+    c.loading = false; if (ui.tab === 'home') render();
   }
   function renderSearch() {
-    var h = '<div class="page-h"><h1 class="logo"><i></i>Кіноман</h1></div>' + featureHtml();
+    var h = '<div class="page-h"><h1>Пошук</h1></div>';
     if (!F.keyOf()) h += noKeyHtml();
     h += '<form class="searchbar" data-form="search" role="search"><input type="search" id="q" name="q" placeholder="' + (F.gemKeyOf() ? 'Назва фільму чи серіалу' : 'Назва англійською або IMDb ID') + '" value="' + esc(ui.q) + '" autocomplete="off" autocapitalize="none" enterkeyhint="search" aria-label="Назва фільму чи серіалу"><button class="btn" type="submit" aria-label="Шукати">' + ic('search') + '</button></form>';
     h += '<div class="seg" role="group" aria-label="Тип">' + [['', 'Усе'], ['movie', 'Фільми'], ['series', 'Серіали']].map(function (t) { return '<button type="button" data-act="type" data-type="' + t[0] + '" aria-pressed="' + (ui.type === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
@@ -90,18 +137,27 @@
   }
 
   // ---------- Списки ----------
-  function cardHtml(it) {
+  function cardHtml(it, i, status) {
+    var img = it.poster ? '<img src="' + esc(it.poster) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '';
+    var st = ' style="--h:' + hue(it.id) + ';--i:' + i + '"', nm = esc(it.titleUk || it.title);
+    if (status === 'seen') {
+      var num = it.myRating ? '<b class="me">' + it.myRating + '</b><i>з 10</i>' : (it.type === 'series' && F.watchedCount(it) ? '<b class="done">' + F.watchedCount(it) + '</b><i>еп.</i>' : '<b class="none">—</b><i>без оцінки</i>');
+      var when = it.seenAt ? new Date(it.seenAt).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+      return '<button class="card stub glow"' + st + ' data-act="open" data-id="' + it.id + '"><span class="poster"><span class="ph">' + esc(it.title) + '</span>' + img + '</span><span class="mid"><span class="name">' + nm + '</span><span class="yr">' + esc(it.year) + (it.ratings.imdb != null ? ', IMDb ' + it.ratings.imdb.toFixed(1) : '') + '</span>' + (when ? '<span class="when">' + esc(when) + '</span>' : '') + '</span><span class="num">' + num + '</span></button>';
+    }
     var b = '';
     if (it.ratings.imdb != null) b += '<span>' + it.ratings.imdb.toFixed(1) + '</span>';
     if (it.myRating) b += '<span class="me" title="Моя оцінка">' + it.myRating + '</span>';
     else if (it.type === 'series' && F.watchedCount(it)) b += '<span class="done">' + F.watchedCount(it) + ' еп.</span>';
-    return '<button class="card glow" style="--h:' + hue(it.id) + '" data-act="open" data-id="' + it.id + '">' + '<span class="poster"><span class="ph">' + esc(it.title) + '</span>' + (it.poster ? '<img src="' + esc(it.poster) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '') + '<span class="badge">' + b + '</span></span><span class="name">' + esc(it.titleUk || it.title) + '</span><span class="yr">' + esc(it.year) + '</span></button>';
+    return '<button class="card glow"' + st + ' data-act="open" data-id="' + it.id + '"><span class="poster"><span class="ph">' + esc(it.title) + '</span>' + img + '<span class="badge">' + b + '</span><span class="over"><span class="name">' + nm + '</span><span class="yr">' + esc(it.year) + '</span></span></span></button>';
   }
   function renderList(status) {
     var f = ui.lists[status], all = F.list(status), items = F.list(status, f);
-    var h = '<div class="page-h"><div><h1>' + (status === 'want' ? 'Хочу' : 'Переглянуто') + '</h1><p class="sub">' + all.length + ' ' + (status === 'want' ? plural(all.length, 'позиція', 'позиції', 'позицій') : plural(all.length, 'фільм і серіал', 'фільми й серіали', 'фільмів і серіалів')) + '</p></div>' + (status === 'want' && all.length > 1 ? '<button class="btn soft sm" data-act="random">' + ic('shuffle', 'sm') + 'Що подивитись?</button>' : '') + '</div>';
+    var avg = status === 'seen' ? F.stats().avgMine : null;
+    var h = '<div class="page-h big"><div><h1>' + NAMES[status] + '</h1><p class="sub">' + all.length + ' ' + (status !== 'seen' ? plural(all.length, 'позиція', 'позиції', 'позицій') : plural(all.length, 'фільм і серіал', 'фільми й серіали', 'фільмів і серіалів')) + (avg != null ? ', середня оцінка ' + avg.toFixed(1) : '') + '</p></div>' + (status === 'want' && all.length > 1 ? '<button class="btn soft sm" data-act="random">' + ic('shuffle', 'sm') + 'Що подивитись?</button>' : '') + '</div>';
     if (!all.length) {
-      return h + (status === 'want' ? emptyHtml('bookmark', 'Тут буде ваш список', 'Знайдіть фільм і натисніть «Хочу», щоб не забути його.', '<p><button class="btn" data-act="tab" data-tab="search">Знайти фільм</button></p>')
+      return h + (status === 'want' ? emptyHtml('heart', 'Тут буде ваш список', 'Знайдіть фільм і натисніть «В обране», щоб не забути його.', '<p><button class="btn" data-act="tab" data-tab="search">Знайти фільм</button></p>')
+        : status === 'watching' ? emptyHtml('play', 'Зараз нічого не дивитесь', 'Натисніть «Дивлюсь» у картці фільму чи серіалу. Для серіалів тут буде видно, скільки серій вже позаду.', '<p><button class="btn" data-act="tab" data-tab="search">Знайти фільм</button></p>')
         : emptyHtml('eye', 'Поки нічого не переглянуто', 'Позначайте фільми як переглянуті й ставте свої оцінки від 1 до 10.', '<p><button class="btn" data-act="tab" data-tab="search">Знайти фільм</button></p>'));
     }
     h += '<div class="seg" role="group" aria-label="Тип">' + [['', 'Усе'], ['movie', 'Фільми'], ['series', 'Серіали']].map(function (t) { return '<button type="button" data-act="ltype" data-type="' + t[0] + '" aria-pressed="' + (f.type === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
@@ -109,7 +165,7 @@
     var gs = F.genres(status);
     if (gs.length > 1) h += '<div class="chips" role="group" aria-label="Жанри"><button class="chip' + (!f.genre ? ' on' : '') + '" data-act="genre" data-genre="">Усі жанри</button>' + gs.slice(0, 14).map(function (g) { return '<button class="chip' + (f.genre === g.name ? ' on' : '') + '" data-act="genre" data-genre="' + esc(g.name) + '">' + esc(F.genreUk(g.name)) + ' ' + g.count + '</button>'; }).join('') + '</div>';
     if (!items.length) return h + emptyHtml('film', 'За цим фільтром порожньо', 'Змініть тип чи жанр.');
-    return h + '<div class="grid">' + items.map(cardHtml).join('') + '</div>';
+    return h + '<div class="' + (status === 'seen' ? 'stubs' : 'grid') + '">' + items.map(function (it, i) { return cardHtml(it, i, status); }).join('') + '</div>';
   }
 
   // ---------- Ще ----------
@@ -131,7 +187,7 @@
     h += '<p style="margin:10px 0 0;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost sm" data-act="testgem"' + (F.gemKeyOf() ? '' : ' disabled') + '>Перевірити ключ</button>' + (!F.gemKeyOf() && F.foreignGemKey() ? '<button class="btn soft sm" data-act="usenutri">Взяти ключ із NutriPlan</button>' : '') + '</p>';
     if (ui.gemMsg) h += '<p class="' + (ui.gemMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.gemMsg.text) + '</p>';
     h += '<p class="fine">Ключ зберігається лише в цьому телефоні й не потрапляє в копію даних. До Google надсилається тільки назва, яку ви шукаєте, та опис фільму для перекладу. Це безкоштовно в межах ліміту Google.</p></section>';
-    h += '<section class="panel"><h2>Ваша статистика</h2><div class="stats"><div class="stat"><div class="v">' + s.seen + '</div><div class="n">переглянуто</div></div><div class="stat"><div class="v">' + s.want + '</div><div class="n">у списку «Хочу»</div></div><div class="stat"><div class="v">' + (s.avgMine == null ? '—' : s.avgMine.toFixed(1)) + '</div><div class="n">середня оцінка</div></div><div class="stat"><div class="v">' + (s.minutes ? esc(F.fmtMinutes(s.minutes)) : '—') + '</div><div class="n">часу за екраном</div></div></div>' + (s.topGenres.length ? '<p class="sub">Найчастіше: ' + s.topGenres.map(function (g) { return esc(F.genreUk(g.name)); }).join(', ') + '</p>' : '') + '</section>';
+    h += '<section class="panel"><h2>Ваша статистика</h2><div class="stats"><div class="stat"><div class="v">' + s.seen + '</div><div class="n">переглянуто</div></div><div class="stat"><div class="v">' + s.want + '</div><div class="n">в обраному</div></div><div class="stat"><div class="v">' + (s.avgMine == null ? '—' : s.avgMine.toFixed(1)) + '</div><div class="n">середня оцінка</div></div><div class="stat"><div class="v">' + (s.minutes ? esc(F.fmtMinutes(s.minutes)) : '—') + '</div><div class="n">часу за екраном</div></div></div>' + (s.topGenres.length ? '<p class="sub">Найчастіше: ' + s.topGenres.map(function (g) { return esc(F.genreUk(g.name)); }).join(', ') + '</p>' : '') + '</section>';
     h += '<section class="panel"><h2>Копія даних</h2><p class="sub" style="margin:0 0 10px">Списки, оцінки й нотатки лежать тільки в цьому телефоні. Збережіть копію, щоб перенести їх на інший пристрій чи не втратити при очищенні браузера.</p><div class="actions" style="margin-top:0"><button class="btn ghost" data-act="export">' + ic('download', 'sm') + 'Зберегти копію</button><button class="btn ghost" data-act="import">' + ic('upload', 'sm') + 'Відновити</button></div><input type="file" id="import-file" accept="application/json,.json" class="hide">';
     if (ui.backupMsg) h += '<p class="' + (ui.backupMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.backupMsg.text) + '</p>';
     if (F.isSaveFailed()) h += '<p class="er-t">Телефон не дає зберегти дані. Звільніть місце або вимкніть приватний режим.</p>';
@@ -199,14 +255,14 @@
         (sh.error ? '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(sh.error)) + '<p style="margin:10px 0 0"><button class="btn sm" data-act="retry">Спробувати ще раз</button></p></div></div>' : '<div class="spin" role="status" aria-label="Завантаження"></div>') + '</div>';
     }
     var r = it.ratings, tr = sheetTr(sh, lib, it);
-    var h = hdr + '<div class="hero"><div class="bg" style="' + (it.poster ? 'background-image:url(\'' + esc(it.poster) + '\')' : '') + '"></div><div class="in">' + posterHtml(it.poster, it.title) + '<div class="info"><h3>' + esc(tr.titleUk || it.title) + '</h3><div class="meta">' + (tr.titleUk && tr.titleUk !== it.title ? esc(it.title) + '<br>' : '') + esc(typeLabel(it.type)) + (it.year ? ', ' + esc(it.year) : '') + (it.runtime ? '<br>' + esc(F.fmtMinutes(it.runtime)) + (it.type === 'series' ? ' за серію' : '') : '') + (it.rated ? '<br>' + esc(it.rated) : '') + '</div></div></div></div><div class="body">';
+    var h = hdr + '<div class="hero glow" style="--h:' + hue(it.id) + '"><div class="bg" style="' + (it.poster ? 'background-image:url(\'' + esc(it.poster) + '\')' : '') + '"></div><div class="in">' + posterHtml(it.poster, it.title) + '<div class="info"><h3>' + esc(tr.titleUk || it.title) + '</h3><div class="meta">' + (tr.titleUk && tr.titleUk !== it.title ? esc(it.title) + '<br>' : '') + esc(typeLabel(it.type)) + (it.year ? ', ' + esc(it.year) : '') + (it.runtime ? '<br>' + esc(F.fmtMinutes(it.runtime)) + (it.type === 'series' ? ' за серію' : '') : '') + (it.rated ? '<br>' + esc(it.rated) : '') + '</div></div></div></div><div class="body">';
     h += '<div class="scores"><div class="score imdb"><div class="v">' + (r.imdb != null ? r.imdb.toFixed(1) + '<small>/10</small>' : '—') + '</div><div class="n">IMDb' + (r.votes ? ', ' + esc(r.votes) : '') + '</div></div>' +
       '<div class="score ' + scoreClass('rt', r.rt) + '"><div class="v">' + (r.rt != null ? r.rt + '<small>%</small>' : '—') + '</div><div class="n">Rotten Tomatoes</div></div>' +
       '<div class="score ' + scoreClass('meta', r.meta) + '"><div class="v">' + (r.meta != null ? r.meta + '<small>/100</small>' : '—') + '</div><div class="n">Metacritic</div></div></div>';
     if (it.genre.length) h += '<div class="tags">' + it.genre.map(function (g) { return '<span class="tag">' + esc(F.genreUk(g)) + '</span>'; }).join('') + '</div>';
     var seen = !!(lib && lib.status === 'seen');
     h += '<div class="ticket"><div class="tk-top">' + (seen ? '<span class="stamp' + (sh.stamp ? ' pop' : '') + '">ПЕРЕГЛЯНУТО</span>' : '') +
-      '<div class="status"><button class="btn ghost' + (lib && lib.status === 'want' ? ' on' : '') + '" data-act="status" data-st="want" aria-pressed="' + !!(lib && lib.status === 'want') + '">' + ic('bookmark', 'sm') + 'Хочу</button><button class="btn ghost' + (seen ? ' on' : '') + '" data-act="status" data-st="seen" aria-pressed="' + seen + '">' + ic('eye', 'sm') + 'Переглянуто</button></div>';
+      '<div class="status">' + [['want', 'heart', 'Обране'], ['watching', 'play', 'Дивлюсь'], ['seen', 'eye', 'Переглянуто']].map(function (c) { var on = !!(lib && lib.status === c[0]); return '<button class="btn ghost' + (on ? ' on' : '') + '" data-act="status" data-st="' + c[0] + '" aria-pressed="' + on + '">' + ic(c[1], 'sm') + '<span>' + c[2] + '</span></button>'; }).join('') + '</div>';
     if (seen && lib.seenAt) h += '<p class="tk-date">Переглянуто ' + esc(new Date(lib.seenAt).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })) + '</p>';
     sh.stamp = false;
     h += '</div><div class="tk-cut"><i></i></div><div class="tk-bot"><div class="tk-h">Моя оцінка' + (lib && lib.myRating ? ': ' + lib.myRating + ' з 10' : '') + '</div><div class="scale" role="group" aria-label="Моя оцінка">';
@@ -272,6 +328,8 @@
     var lib = F.getItem(sh.id); if (lib && !lib.cast.length && !lib.recs.length) F.setExtras(sh.id, sh.extras.data);
   }
   function sheetItem() { var sh = ui.sheet; return sh ? (sh.item || F.getItem(sh.id)) : null; }
+  // Відмічена серія в «Обраних» означає, що серіал уже дивляться
+  function startWatching(id) { var l = F.getItem(id); if (l && l.status === 'want' && F.watchedCount(l)) F.setStatus(l, 'watching'); }
   function ensureInLibrary(st) { var sh = ui.sheet, it = sheetItem(); if (!it) return null; return F.setStatus(it, st || 'want'); }
   async function loadSeasonNow(n) {
     var sh = ui.sheet; if (!sh) return; sh.season = n; sh.seasonError = null;
@@ -285,18 +343,30 @@
   // ---------- Вивід ----------
   function render() {
     var st = ui.tab;
-    app.innerHTML = st === 'search' ? renderSearch() : st === 'more' ? renderMore() : renderList(st);
-    var wc = F.list('want').length;
-    tabsEl.innerHTML = TABS.map(function (t) { return '<button data-act="tab" data-tab="' + t[0] + '"' + (st === t[0] ? ' aria-current="page"' : '') + '>' + ic(t[2]) + '<span>' + t[1] + '</span>' + (t[0] === 'want' && wc ? '<span class="cnt">' + wc + '</span>' : '') + '</button>'; }).join('');
+    app.className = ui.enter ? 'enter' : ''; ui.enter = false;
+    app.innerHTML = st === 'home' ? renderHome() : st === 'search' ? renderSearch() : st === 'more' ? renderMore() : renderList(st);
+    var cnt = { want: F.list('want').length, watching: F.list('watching').length };
+    tabsEl.innerHTML = TABS.map(function (t) { return '<button data-act="tab" data-tab="' + t[0] + '" aria-label="' + t[1] + '"' + (st === t[0] ? ' aria-current="page"' : '') + '>' + ic(t[2]) + '<span>' + t[1] + '</span>' + (cnt[t[0]] ? '<span class="cnt">' + cnt[t[0]] + '</span>' : '') + '</button>'; }).join('');
     if (ui.sheet) renderSheet();
+    if (st === 'home') loadCat();
   }
-  function setTab(t) { ui.tab = t; ui.keyMsg = null; ui.backupMsg = null; ui.gemMsg = null; ui.tmdbMsg = null; render(); window.scrollTo(0, 0); }
+  function setTab(t) { ui.tab = t; ui.enter = true; ui.keyMsg = null; ui.backupMsg = null; ui.gemMsg = null; ui.tmdbMsg = null; render(); window.scrollTo(0, 0); }
 
   // ---------- Події ----------
   async function onAct(el) {
     var a = el.dataset.act, id = el.dataset.id;
     switch (a) {
       case 'tab': setTab(el.dataset.tab); break;
+      case 'hometype': ui.homeMt = el.dataset.mt === 'tv' ? 'tv' : 'movie'; ui.cat.error = null; ui.enter = true; render(); break;
+      case 'retrycat': ui.cat.error = null; render(); break;
+      case 'cat': {
+        var ck = 'cat' + el.dataset.tid; if (ui.busy[ck]) return; ui.busy[ck] = true; toast('Відкриваємо…');
+        try {
+          var imdb0 = await F.tmdbImdbId(el.dataset.mt, el.dataset.tid); toastEl.classList.remove('show');
+          openSheet(imdb0, { id: imdb0, title: el.dataset.title, year: el.dataset.year, type: el.dataset.mt === 'tv' ? 'series' : 'movie', poster: F.tmdbImg(el.dataset.poster, 'w342') });
+        } catch (e) { toast(F.describeError(e)); }
+        delete ui.busy[ck]; break;
+      }
       case 'type': ui.type = el.dataset.type; if (ui.q.trim() && ui.searched) doSearch(false); else render(); break;
       case 'more': doSearch(true); break;
       case 'open': {
@@ -305,7 +375,7 @@
       }
       case 'quick': {
         if (ui.busy[id] || F.getItem(id)) return; ui.busy[id] = true; render();
-        try { var det = detCache[id] || await F.details(id); detCache[id] = det; F.setStatus(det, el.dataset.st); toast(el.dataset.st === 'seen' ? 'Додано до «Переглянуто»' : 'Додано до «Хочу»', 'Скасувати', function () { F.removeItem(id); }); }
+        try { var det = detCache[id] || await F.details(id); detCache[id] = det; F.setStatus(det, el.dataset.st); toast(el.dataset.st === 'seen' ? 'Додано до «Переглянуто»' : el.dataset.st === 'watching' ? 'Додано до «Дивлюсь»' : 'Додано в «Обрані»', 'Скасувати', function () { F.removeItem(id); }); }
         catch (e) { ui.error = e; }
         delete ui.busy[id]; render(); break;
       }
@@ -321,7 +391,7 @@
         var it1 = sheetItem(); if (!it1) return;
         var lib1 = F.getItem(it1.id), becameSeen = false;
         if (!lib1) { F.setStatus(it1, 'seen'); becameSeen = true; }
-        else if (lib1.status === 'want' && lib1.myRating == null) { F.setStatus(lib1, 'seen'); becameSeen = true; }
+        else if ((lib1.status === 'want' || lib1.status === 'watching') && lib1.myRating == null) { F.setStatus(lib1, 'seen'); becameSeen = true; }
         F.setMyRating(it1.id, Number(el.dataset.n));
         if (becameSeen && ui.sheet) { ui.sheet.stamp = true; renderSheet(); }
         break;
@@ -355,13 +425,13 @@
       case 'season': loadSeasonNow(Number(el.dataset.n)); break;
       case 'ep': {
         var it2 = sheetItem(); if (!it2) return;
-        if (!F.getItem(it2.id)) { var lib2 = F.setStatus(it2, 'want'); var t = ui.sheet.tmp[ui.sheet.season]; if (t) { lib2.seasons[String(ui.sheet.season)] = t; } }
-        F.toggleEpisode(it2.id, ui.sheet.season, Number(el.dataset.e)); renderSheet(); render(); break;
+        if (!F.getItem(it2.id)) { var lib2 = F.setStatus(it2, 'watching'); var t = ui.sheet.tmp[ui.sheet.season]; if (t) { lib2.seasons[String(ui.sheet.season)] = t; } }
+        F.toggleEpisode(it2.id, ui.sheet.season, Number(el.dataset.e)); startWatching(it2.id); renderSheet(); render(); break;
       }
       case 'season-all': {
         var it3 = sheetItem(); if (!it3) return;
-        if (!F.getItem(it3.id)) { var lib3 = F.setStatus(it3, 'want'); var t3 = ui.sheet.tmp[ui.sheet.season]; if (t3) lib3.seasons[String(ui.sheet.season)] = t3; }
-        F.setSeasonWatched(it3.id, ui.sheet.season, el.dataset.on === '1'); renderSheet(); render(); break;
+        if (!F.getItem(it3.id)) { var lib3 = F.setStatus(it3, 'watching'); var t3 = ui.sheet.tmp[ui.sheet.season]; if (t3) lib3.seasons[String(ui.sheet.season)] = t3; }
+        F.setSeasonWatched(it3.id, ui.sheet.season, el.dataset.on === '1'); startWatching(it3.id); renderSheet(); render(); break;
       }
       case 'refresh': {
         var sh = ui.sheet; if (!sh || sh.refreshing) return; sh.refreshing = true; sh.error = null; renderSheet();

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v5';
+  var VERSION = 'v7';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -46,7 +46,7 @@
       totalSeasons: Math.max(0, Math.min(100, Number(x.totalSeasons) || 0)),
       tmdbId: Number(x.tmdbId) > 0 ? Math.floor(Number(x.tmdbId)) : 0, mt: x.mt === 'tv' ? 'tv' : x.mt === 'movie' ? 'movie' : '', cast: cleanCast(x.cast), recs: cleanRecs(x.recs),
       titleUk: String(x.titleUk || '').slice(0, 200), plotUk: String(x.plotUk || '').slice(0, 2500),
-      status: x.status === 'seen' ? 'seen' : 'want', myRating: my, note: String(x.note || '').slice(0, 1000),
+      status: x.status === 'seen' ? 'seen' : x.status === 'watching' ? 'watching' : 'want', myRating: my, note: String(x.note || '').slice(0, 1000),
       addedAt: Number(x.addedAt) || 0, seenAt: Number(x.seenAt) || 0, updatedAt: Number(x.updatedAt) || 0, fetchedAt: Number(x.fetchedAt) || 0,
       seasons: seasons, watched: watched
     };
@@ -157,7 +157,7 @@
 
   // ---------- TMDB (необов'язково): склад акторів із фото, схожі фільми, українські назви ----------
   function tmdbKeyOf() { return (S.tmdbKey || '').trim(); }
-  function setTmdbKey(k) { S.tmdbKey = String(k || '').trim().slice(0, 600); save(); }
+  function setTmdbKey(k) { S.tmdbKey = String(k || '').trim().slice(0, 600); catCache = {}; save(); }
   function tmdbImg(path, size) { return imgPath(path) ? 'https://image.tmdb.org/t/p/' + (size || 'w185') + path : ''; }
   async function tmdb(path, params) {
     var key = tmdbKeyOf(); if (!key) throw err('NEED_TMDB');
@@ -208,6 +208,24 @@
     var d = await tmdb('/' + (mt === 'tv' ? 'tv' : 'movie') + '/' + Math.floor(Number(tid)) + '/external_ids', {});
     var id = clean(d.imdb_id); if (!isId(id)) throw err('NO_IMDB');
     return id;
+  }
+  // Каталог для головної: добірки TMDB, кеш на годину лише в пам’яті
+  var catCache = {};
+  var CAT = {
+    trending: { movie: '/trending/movie/week', tv: '/trending/tv/week' },
+    now: { movie: '/movie/now_playing', tv: '/tv/on_the_air' },
+    top: { movie: '/movie/top_rated', tv: '/tv/top_rated' },
+    popular: { movie: '/movie/popular', tv: '/tv/popular' }
+  };
+  async function catalog(kind, mt) {
+    mt = mt === 'tv' ? 'tv' : 'movie'; var path = CAT[kind] && CAT[kind][mt]; if (!path) return [];
+    var ck = kind + ':' + mt, c = catCache[ck]; if (c && FB.now() - c.t < 3600000) return c.items;
+    var p = { language: 'uk-UA', page: 1 }; if (kind === 'now' && mt === 'movie') p.region = 'UA';
+    var d = await tmdb(path, p);
+    var items = (Array.isArray(d.results) ? d.results : []).filter(function (r) { return r && r.id > 0 && imgPath(r.poster_path) && clean(r.title || r.name); }).slice(0, 20).map(function (r) {
+      var v = Number(r.vote_average); return { tid: Math.floor(r.id), mt: mt, title: clean(r.title || r.name), year: yearOf(r.release_date || r.first_air_date), poster: r.poster_path, vote: v > 0 ? round1(v) : null };
+    });
+    catCache[ck] = { t: FB.now(), items: items }; return items;
   }
   async function testTmdb() { await tmdb('/configuration', {}); return true; }
 
@@ -356,11 +374,11 @@
       ['title', 'year', 'type', 'poster', 'rated', 'released', 'runtime', 'genre', 'director', 'writer', 'actors', 'plot', 'language', 'country', 'awards', 'ratings', 'totalSeasons', 'fetchedAt'].forEach(function (k) { ex[k] = fresh[k]; });
       ex.updatedAt = stamp(ex.updatedAt); save(); return ex;
     }
-    fresh.status = status === 'seen' ? 'seen' : 'want'; fresh.addedAt = t; fresh.seenAt = fresh.status === 'seen' ? t : 0; fresh.updatedAt = t;
+    fresh.status = status === 'seen' ? 'seen' : status === 'watching' ? 'watching' : 'want'; fresh.addedAt = t; fresh.seenAt = fresh.status === 'seen' ? t : 0; fresh.updatedAt = t;
     S.items[fresh.id] = fresh; save(); return fresh;
   }
   function setStatus(fresh, status) {
-    if (status !== 'want' && status !== 'seen') return null;
+    if (status !== 'want' && status !== 'seen' && status !== 'watching') return null;
     var it = S.items[fresh.id] ? S.items[fresh.id] : addOrUpdate(fresh, status);
     if (it.status !== status) { it.status = status; it.seenAt = status === 'seen' ? FB.now() : 0; it.updatedAt = stamp(it.updatedAt); save(); }
     return it;
@@ -414,11 +432,11 @@
   }
   function randomPick(status, o) { var a = list(status, o); return a.length ? a[Math.floor(Math.random() * a.length)] : null; }
   function stats() {
-    var seen = list('seen'), want = list('want'); var rated = seen.filter(function (it) { return it.myRating; });
+    var seen = list('seen'), want = list('want'), watching = list('watching'); var rated = seen.filter(function (it) { return it.myRating; });
     var minutes = 0;
     seen.forEach(function (it) { if (it.type === 'series') minutes += watchedCount(it) * (it.runtime || 0); else minutes += it.runtime || 0; });
     var g = genres('seen').slice(0, 3);
-    return { want: want.length, seen: seen.length, avgMine: rated.length ? round1(rated.reduce(function (t, it) { return t + it.myRating; }, 0) / rated.length) : null, minutes: minutes, topGenres: g };
+    return { want: want.length, watching: watching.length, seen: seen.length, avgMine: rated.length ? round1(rated.reduce(function (t, it) { return t + it.myRating; }, 0) / rated.length) : null, minutes: minutes, topGenres: g };
   }
   function fmtMinutes(m) {
     m = Math.round(m || 0); if (m < 60) return m + ' хв';
@@ -444,7 +462,7 @@
 
   Object.assign(FB, {
     VERSION: VERSION, init: init, on: on, save: save, isSaveFailed: function () { return saveFailed; },
-    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, tmdbImdbId: tmdbImdbId, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
+    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, tmdbImdbId: tmdbImdbId, catalog: catalog, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
     getItem: getItem, setStatus: setStatus, setMyRating: setMyRating, setNote: setNote, removeItem: removeItem, restoreItem: restoreItem, refresh: refresh,
     toggleEpisode: toggleEpisode, setSeasonWatched: setSeasonWatched, seasonProgress: seasonProgress, watchedCount: watchedCount,
     list: list, genres: genres, randomPick: randomPick, stats: stats, fmtMinutes: fmtMinutes, SORTS: SORTS, brief: brief,
