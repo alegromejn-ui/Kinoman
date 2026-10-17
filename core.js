@@ -1,4 +1,4 @@
-/* Кіно: логіка. Дані фільмів беруться з OMDb API, а ваші списки, оцінки й нотатки лежать лише в цьому телефоні. */
+/* Кіноман: логіка. Дані фільмів беруться з OMDb API, а ваші списки, оцінки й нотатки лежать лише в цьому телефоні. */
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
@@ -242,7 +242,7 @@
   }
   function importJSON(text) {
     var o; try { o = JSON.parse(text); } catch (e) { return { error: 'Це не файл копії: не вдалося прочитати.' }; }
-    if (!o || o.app !== 'kino' || !o.items || typeof o.items !== 'object') return { error: 'Це не файл копії «Кіно».' };
+    if (!o || o.app !== 'kino' || !o.items || typeof o.items !== 'object') return { error: 'Це не файл копії «Кіноман».' };
     var added = 0, updated = 0;
     Object.keys(o.items).slice(0, 5000).forEach(function (k) {
       var n = normalizeItem(o.items[k]); if (!n) return; var ex = S.items[n.id];

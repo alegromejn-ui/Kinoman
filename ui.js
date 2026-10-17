@@ -1,4 +1,4 @@
-/* Кіно: інтерфейс */
+/* Кіноман: інтерфейс */
 (function () {
   'use strict';
   var F = window.FB;
@@ -46,7 +46,7 @@
     return '<div class="row"><button class="open" data-act="open" data-id="' + r.id + '">' + posterHtml(r.poster, r.title) + '<span class="txt"><span class="t">' + esc(r.title) + '</span><span class="m">' + esc(typeLabel(r.type)) + (r.year ? ', ' + esc(r.year) : '') + '</span></span></button><div class="acts">' + acts + '</div></div>';
   }
   function renderSearch() {
-    var h = '<div class="page-h"><h1>Кіно</h1></div>';
+    var h = '<div class="page-h"><h1>Кіноман</h1></div>';
     if (!F.keyOf()) h += noKeyHtml();
     h += '<form class="searchbar" data-form="search" role="search"><input type="search" id="q" name="q" placeholder="Назва або ID з IMDb" value="' + esc(ui.q) + '" autocomplete="off" autocapitalize="none" enterkeyhint="search" aria-label="Назва фільму чи серіалу"><button class="btn" type="submit" aria-label="Шукати">' + ic('search') + '</button></form>';
     h += '<div class="seg" role="group" aria-label="Тип">' + [['', 'Усе'], ['movie', 'Фільми'], ['series', 'Серіали']].map(function (t) { return '<button type="button" data-act="type" data-type="' + t[0] + '" aria-pressed="' + (ui.type === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
@@ -110,7 +110,7 @@
     if (ui.backupMsg) h += '<p class="' + (ui.backupMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.backupMsg.text) + '</p>';
     if (F.isSaveFailed()) h += '<p class="er-t">Телефон не дає зберегти дані. Звільніть місце або вимкніть приватний режим.</p>';
     h += '</section>';
-    h += '<p class="fine">Версія додатка: kino-' + F.VERSION + '. Дані фільмів: <a href="https://www.omdbapi.com/" target="_blank" rel="noopener">OMDb API</a>. Опис і назви англійською. Рейтинги належать IMDb, Rotten Tomatoes та Metacritic.</p>';
+    h += '<p class="fine">Версія додатка: kinoman-' + F.VERSION + '. Дані фільмів: <a href="https://www.omdbapi.com/" target="_blank" rel="noopener">OMDb API</a>. Опис і назви англійською. Рейтинги належать IMDb, Rotten Tomatoes та Metacritic.</p>';
     return h;
   }
 
@@ -279,10 +279,10 @@
     }
   }
   async function doExport() {
-    var text = F.exportJSON(), name = 'kino-kopiya-' + new Date().toISOString().slice(0, 10) + '.json';
+    var text = F.exportJSON(), name = 'kinoman-kopiya-' + new Date().toISOString().slice(0, 10) + '.json';
     try {
       var file = new File([text], name, { type: 'application/json' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Копія «Кіно»' }); ui.backupMsg = { ok: true, text: 'Копію збережено.' }; render(); return; }
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Копія «Кіноман»' }); ui.backupMsg = { ok: true, text: 'Копію збережено.' }; render(); return; }
     } catch (e) { if (e && e.name === 'AbortError') return; }
     var url = URL.createObjectURL(new Blob([text], { type: 'application/json' })), a = document.createElement('a');
     a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
