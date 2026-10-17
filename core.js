@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v12';
+  var VERSION = 'v14';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -48,7 +48,7 @@
       totalSeasons: Math.max(0, Math.min(100, Number(x.totalSeasons) || 0)),
       tmdbId: Number(x.tmdbId) > 0 ? Math.floor(Number(x.tmdbId)) : 0, mt: x.mt === 'tv' ? 'tv' : x.mt === 'movie' ? 'movie' : '', cast: cleanCast(x.cast), recs: cleanRecs(x.recs),
       titleUk: String(x.titleUk || '').slice(0, 200), plotUk: String(x.plotUk || '').slice(0, 2500),
-      trailer: /^[\w-]{11}$/.test(String(x.trailer || '')) ? String(x.trailer) : '', seasonEps: cleanSeasonEps(x.seasonEps), nextAir: cleanNextAir(x.nextAir), lastAir: cleanNextAir(x.lastAir), tvStatus: String(x.tvStatus || '').slice(0, 40),
+      trailer: /^[\w-]{11}$/.test(String(x.trailer || '')) ? String(x.trailer) : '', seasonEps: cleanSeasonEps(x.seasonEps), nextAir: cleanNextAir(x.nextAir), lastAir: cleanNextAir(x.lastAir), planAt: /^\d{4}-\d{2}-\d{2}$/.test(String(x.planAt || '')) ? String(x.planAt) : '', tvStatus: String(x.tvStatus || '').slice(0, 40),
       xv: Number(x.xv) || 0, exAt: Number(x.exAt) || 0, cols: Array.isArray(x.cols) ? x.cols.map(String).filter(function (c) { return /^c[\w]{1,24}$/.test(c); }).slice(0, 50) : [],
       status: x.status === 'seen' ? 'seen' : x.status === 'watching' ? 'watching' : 'want', myRating: my, note: String(x.note || '').slice(0, 1000),
       addedAt: Number(x.addedAt) || 0, seenAt: Number(x.seenAt) || 0, updatedAt: Number(x.updatedAt) || 0, fetchedAt: Number(x.fetchedAt) || 0,
@@ -234,11 +234,11 @@
   function best(vc, extra) { return ext({ sort_by: 'vote_average.desc', 'vote_count.gte': vc }, extra); }
   function collDefs(cat) {
     var L = [], yAgo = ymd(FB.now() - 365 * 86400000);
-    function add(id, title, mt, path, p, toon) { L.push({ id: id, title: title, mt: mt, path: path, p: p || {}, toon: !!toon }); }
+    function add(id, title, mt, path, p, toon, limit) { L.push({ id: id, title: title, mt: mt, path: path, p: p || {}, toon: !!toon, limit: limit || 0 }); }
     if (cat === 'tv') {
       add('t-trend', 'У тренді цього тижня', 'tv', '/trending/tv/week');
       add('t-now', 'Виходять зараз', 'tv', '/tv/on_the_air');
-      add('t-top', 'Найвище оцінені за весь час', 'tv', '/tv/top_rated');
+      add('t-top', 'Топ 50 серіалів за рейтингом', 'tv', '/discover/tv', best(1500), 0, 50);
       add('t-pop', 'Популярні', 'tv', '/tv/popular');
       add('t-gems', 'Приховані перлини', 'tv', '/discover/tv', best(200, { 'vote_average.gte': 7.8, 'vote_count.lte': 1500 }));
       add('t-2020', 'Найкращі 2020-х', 'tv', '/discover/tv', best(500, dates('tv', '2020-01-01', '2029-12-31')));
@@ -256,18 +256,18 @@
     } else if (cat === 'toon') {
       add('c-pop', 'Мультфільми: популярні', 'movie', '/discover/movie', { with_genres: '16' }, 1);
       add('c-new', 'Нові мультфільми', 'movie', '/discover/movie', ext({ with_genres: '16' }, dates('movie', yAgo, '')), 1);
-      add('c-top', 'Мультфільми: найвище оцінені', 'movie', '/discover/movie', best(1000, { with_genres: '16' }), 1);
+      add('c-top', 'Топ 50 мультфільмів за рейтингом', 'movie', '/discover/movie', best(2000, { with_genres: '16' }), 1, 50);
       add('c-fam', 'Для всієї родини', 'movie', '/discover/movie', { with_genres: '16,10751' }, 1);
       add('c-old', 'Класичні мультфільми', 'movie', '/discover/movie', best(500, ext({ with_genres: '16' }, dates('movie', '', '1999-12-31'))), 1);
       add('c-spop', 'Мультсеріали: популярні', 'tv', '/discover/tv', { with_genres: '16' }, 1);
-      add('c-stop', 'Мультсеріали: найвище оцінені', 'tv', '/discover/tv', best(300, { with_genres: '16' }), 1);
+      add('c-stop', 'Топ 50 мультсеріалів за рейтингом', 'tv', '/discover/tv', best(500, { with_genres: '16' }), 1, 50);
       add('c-scom', 'Комедійні мультсеріали', 'tv', '/discover/tv', { with_genres: '16,35' }, 1);
       add('c-am', 'Аніме: фільми', 'movie', '/discover/movie', best(300, { with_genres: '16', with_original_language: 'ja' }), 1);
       add('c-as', 'Аніме: серіали', 'tv', '/discover/tv', best(300, { with_genres: '16', with_original_language: 'ja' }), 1);
     } else {
       add('m-trend', 'У тренді цього тижня', 'movie', '/trending/movie/week');
       add('m-now', 'Зараз у кінотеатрах', 'movie', '/movie/now_playing', { region: 'UA' });
-      add('m-top', 'Найвище оцінені за весь час', 'movie', '/movie/top_rated');
+      add('m-top', 'Топ 50 фільмів за рейтингом', 'movie', '/discover/movie', best(7000), 0, 50);
       add('m-pop', 'Популярні', 'movie', '/movie/popular');
       add('m-gems', 'Приховані перлини', 'movie', '/discover/movie', best(300, { 'vote_average.gte': 7.4, 'vote_count.lte': 2500 }));
       add('m-2020', 'Найкращі 2020-х', 'movie', '/discover/movie', best(1000, dates('movie', '2020-01-01', '2029-12-31')));
@@ -300,12 +300,22 @@
   // Одна добірка, сторінка за сторінкою (до 10 сторінок, по ~20 фільмів)
   async function collection(id, page) {
     var def = collDef(id); if (!def) return { items: [], more: false };
-    page = Math.max(1, Math.min(10, Math.floor(Number(page)) || 1));
+    page = Math.max(1, Math.min(10, Math.floor(Number(page)) || 1)); if (def.limit) page = 1;
     var ck = 'c:' + id + ':' + page, c = catCache[ck]; if (c && FB.now() - c.t < 3600000) return c.res;
     var p = ext({ language: 'uk-UA', page: page, include_adult: 'false' }, def.p), disc = /^\/discover\//.test(def.path), skip = def.toon ? null : EXCL[def.mt];
     if (disc) { if (!p.sort_by) p.sort_by = 'popularity.desc'; if (skip) p.without_genres = skip.join('|'); }
-    var d = await tmdb(def.path, p);
-    var res = { items: tmdbItems(d, def.mt, skip), more: page < Math.min(10, Number(d.total_pages) || 1) };
+    var res;
+    if (def.limit) {
+      // «Топ N»: кілька сторінок за раз, з нумерацією місць
+      var first = await tmdb(def.path, ext(p, { page: 1 })), last = Math.min(Math.ceil(def.limit / 20) + 1, Number(first.total_pages) || 1), more = [];
+      for (var pg = 2; pg <= last; pg++) more.push(tmdb(def.path, ext(p, { page: pg })));
+      var ds = [first].concat(await Promise.all(more)), seen = {}, all = [];
+      ds.forEach(function (d) { tmdbItems(d, def.mt, skip).forEach(function (x) { if (!seen[x.tid]) { seen[x.tid] = 1; all.push(x); } }); });
+      res = { items: all.slice(0, def.limit).map(function (x, i) { x.rank = i + 1; return x; }), more: false };
+    } else {
+      var d = await tmdb(def.path, p);
+      res = { items: tmdbItems(d, def.mt, skip), more: page < Math.min(10, Number(d.total_pages) || 1) };
+    }
     catCache[ck] = { t: FB.now(), res: res }; return res;
   }
   // Підказки під час набору: TMDB шукає і українською, і англійською
@@ -314,10 +324,16 @@
     q = clean(q).slice(0, 80); if (q.length < 2) return [];
     var ck = q.toLowerCase(); if (sugCache[ck]) return sugCache[ck];
     var d = await tmdb('/search/multi', { query: q, language: 'uk-UA', include_adult: 'false', page: 1 });
-    var items = (Array.isArray(d.results) ? d.results : []).filter(function (r) { return r && r.id > 0 && (r.media_type === 'movie' || r.media_type === 'tv') && clean(r.title || r.name); }).slice(0, 8).map(function (r) {
+    var res = Array.isArray(d.results) ? d.results : [];
+    var items = res.filter(function (r) { return r && r.id > 0 && (r.media_type === 'movie' || r.media_type === 'tv') && clean(r.title || r.name); }).slice(0, 8).map(function (r) {
       var title = clean(r.title || r.name), orig = clean(r.original_title || r.original_name), v = Number(r.vote_average);
       return { tid: Math.floor(r.id), mt: r.media_type, title: title, orig: orig && orig !== title ? orig : '', year: yearOf(r.release_date || r.first_air_date), poster: imgPath(r.poster_path), vote: v > 0 ? round1(v) : null };
     });
+    // актори й режисери: окремий список, щоб пошук за прізвищем вів на сторінку людини
+    items.people = res.filter(function (r) { return r && r.id > 0 && r.media_type === 'person' && clean(r.name); }).slice(0, 3).map(function (r) {
+      return { pid: Math.floor(r.id), name: clean(r.name).slice(0, 80), photo: imgPath(r.profile_path), dept: r.known_for_department === 'Directing' ? 'Режисер' : r.known_for_department === 'Acting' ? 'Актор' : '' };
+    });
+    items.peopleFirst = !!(res[0] && res[0].media_type === 'person');
     sugCache[ck] = items; sugKeys.push(ck); if (sugKeys.length > 60) delete sugCache[sugKeys.shift()];
     return items;
   }
@@ -343,7 +359,8 @@
     var d = await tmdb('/person/' + pid, { language: 'uk-UA', append_to_response: 'combined_credits' });
     var bio = clean(d.biography);
     if (!bio) { try { var en = await tmdb('/person/' + pid, { language: 'en-US' }); bio = clean(en.biography); } catch (e) { /* без біографії */ } }
-    var seen = {}, known = ((d.combined_credits && d.combined_credits.cast) || []).filter(function (c) { return c && c.id > 0 && (c.media_type === 'movie' || c.media_type === 'tv') && imgPath(c.poster_path) && clean(c.title || c.name); });
+    var seen = {}, cc = d.combined_credits || {}, crew = (cc.crew || []).filter(function (c) { return c && c.job === 'Director'; }).map(function (c) { var o = {}; for (var k in c) o[k] = c[k]; o.character = 'Режисер'; return o; });
+    var known = (cc.cast || []).concat(crew).filter(function (c) { return c && c.id > 0 && (c.media_type === 'movie' || c.media_type === 'tv') && imgPath(c.poster_path) && clean(c.title || c.name); });
     known.sort(function (a, b) { return (Number(b.vote_count) || 0) - (Number(a.vote_count) || 0); });
     known = known.filter(function (c) { var k = c.media_type + c.id; if (seen[k]) return false; seen[k] = 1; return true; }).slice(0, 40).map(function (c) {
       var v = Number(c.vote_average); return { tid: Math.floor(c.id), mt: c.media_type, title: clean(c.title || c.name), year: yearOf(c.release_date || c.first_air_date), poster: c.poster_path, vote: v > 0 ? round1(v) : null, character: clean(c.character).slice(0, 80) };
@@ -353,7 +370,8 @@
   async function testTmdb() { await tmdb('/configuration', {}); return true; }
 
   // ---------- Порада від Gemini ----------
-  async function advise() {
+  async function advise(mood) {
+    mood = clean(mood).slice(0, 80);
     var all = Object.keys(S.items).map(function (k) { return S.items[k]; });
     var liked = all.filter(function (it) { return it.myRating; }).sort(function (a, b) { return b.myRating - a.myRating; });
     if (liked.length < 1 && !all.length) throw err('ADVICE_EMPTY');
@@ -361,7 +379,7 @@
     var top = liked.slice(0, 15).map(line), low = liked.filter(function (it) { return it.myRating <= 5; }).slice(0, 6).map(line);
     var known = all.slice(0, 120).map(function (it) { return it.title; });
     var o = await geminiJson('Ти кінорадник для глядача з України. Його оцінки:\n' + (top.join('\n') || '(оцінок ще немає)') + (low.length ? '\nНе сподобалось:\n' + low.join('\n') : '') +
-      '\nЩе в його списках (не радь їх): ' + known.join('; ') + '\nПорадь 6 фільмів або серіалів, яких немає в списках, різних за жанром і роком, що найімовірніше йому сподобаються. Для кожного: title (назва українською, як її знають в Україні), original_title (оригінальна назва), year, type (movie або tv), why (одне речення українською, чому саме йому, з посиланням на його оцінки).',
+      (mood ? '\nПобажання на сьогодні: ' + mood + '. Підбирай саме під це, але зважай і на його смак.' : '') + '\nЩе в його списках (не радь їх): ' + known.join('; ') + '\nПорадь 6 фільмів або серіалів, яких немає в списках, різних за жанром і роком, що найімовірніше йому сподобаються. Для кожного: title (назва українською, як її знають в Україні), original_title (оригінальна назва), year, type (movie або tv), why (одне речення українською, чому саме йому, з посиланням на його оцінки).',
       { type: 'OBJECT', properties: { items: { type: 'ARRAY', items: { type: 'OBJECT', properties: { title: { type: 'STRING' }, original_title: { type: 'STRING' }, year: { type: 'STRING' }, type: { type: 'STRING' }, why: { type: 'STRING' } }, required: ['title', 'original_title', 'year', 'type', 'why'] } } }, required: ['items'] });
     return (Array.isArray(o.items) ? o.items : []).slice(0, 8).map(function (x) {
       return { title: clean(x.title).slice(0, 120), orig: clean(x.original_title).slice(0, 120), year: /^\d{4}/.test(String(x.year)) ? String(x.year).slice(0, 4) : '', mt: x.type === 'tv' ? 'tv' : 'movie', why: clean(x.why).slice(0, 300) };
@@ -539,6 +557,32 @@
     it.updatedAt = stamp(it.updatedAt); save(); return it;
   }
   function setNote(id, text) { var it = S.items[id]; if (!it) return; it.note = String(text || '').slice(0, 1000); it.updatedAt = stamp(it.updatedAt); save(true); }
+  function setPlan(id, date) {
+    var it = S.items[id]; if (!it) return false; date = String(date || '').trim();
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+    it.planAt = date; it.updatedAt = stamp(it.updatedAt); save(); return true;
+  }
+  // Зв'язок запису з TMDB, щоб у каталозі було видно, що фільм уже у списках
+  function setTmdbRef(id, mt, tid) { var it = S.items[id]; tid = Math.floor(Number(tid)); if (!it || !(tid > 0) || it.tmdbId) return; it.tmdbId = tid; it.mt = mt === 'tv' ? 'tv' : 'movie'; save(true); }
+  function tmdbStatus(mt, tid) {
+    tid = Math.floor(Number(tid)); mt = mt === 'tv' ? 'tv' : 'movie';
+    for (var k in S.items) { var it = S.items[k]; if (it.tmdbId === tid && it.mt === mt) return it.status; }
+    return '';
+  }
+  // Фоном підтягує TMDB-ідентифікатори для записів, у яких їх ще немає
+  var filling = false;
+  async function fillTmdbIds(max) {
+    if (filling || !tmdbKeyOf()) return 0; filling = true; var n = 0;
+    try {
+      var due = Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { return !it.tmdbId && FB.now() - it.exAt > 21600000; }).slice(0, max || 8);
+      for (var i = 0; i < due.length; i++) {
+        try { var ex = await tmdbExtras(due[i]); if (ex && !ex.none && S.items[due[i].id]) { setExtras(due[i].id, ex); n++; } else if (S.items[due[i].id]) S.items[due[i].id].exAt = FB.now(); }
+        catch (e) { if (e && (e.code === 'TMDB_NETWORK' || (e.code === 'TMDB_HTTP' && e.status === 401))) break; }
+      }
+      if (n) save(true);
+    } finally { filling = false; }
+    return n;
+  }
   function removeItem(id) { var it = S.items[id]; if (!it) return null; delete S.items[id]; S.gone[id] = stamp(it.updatedAt); save(); return it; }
   function restoreItem(it) { var n = normalizeItem(it); if (n) { n.updatedAt = stamp(Math.max(n.updatedAt, S.gone[n.id] || 0)); delete S.gone[n.id]; S.items[n.id] = n; save(); } }
   async function refresh(id) { var fresh = await details(id); return addOrUpdate(fresh, 'want'); }
@@ -640,7 +684,8 @@
       if (it.type === 'series') { var na = it.nextAir; if (na && na.date >= today && daysBetween(today, na.date) <= 180) out.push({ item: it, date: na.date, label: na.s ? 'S' + na.s + 'E' + na.e : 'Нова серія' }); }
       else if (it.status === 'want') { var r = releasedIso(it.released); if (r && r >= today && daysBetween(today, r) <= 365) out.push({ item: it, date: r, label: 'Прем’єра' }); }
     });
-    return out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; }).slice(0, 12);
+    Object.keys(S.items).forEach(function (k) { var it = S.items[k]; if (it.status !== 'seen' && it.planAt && it.planAt >= today) out.push({ item: it, date: it.planAt, label: it.planAt === today ? 'Заплановано на сьогодні' : 'Заплановано' }); });
+    return out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; }).slice(0, 15);
   }
   var refreshing = false;
   // Фоном оновлює дані серіалів зі списків «Обрані» й «Дивлюсь» (не частіше за раз на 6 годин)
@@ -685,6 +730,23 @@
     var bm = Object.keys(mo).sort(function (a, b) { return mo[b] - mo[a] || (a < b ? 1 : -1); })[0];
     if (bm && mo[bm] > 1) { var MN = ['січень', 'лютий', 'березень', 'квітень', 'травень', 'червень', 'липень', 'серпень', 'вересень', 'жовтень', 'листопад', 'грудень']; r.push({ k: 'Найактивніший місяць', v: MN[Number(bm.slice(5)) - 1] + ' ' + bm.slice(0, 4), n: mo[bm] + ' переглянуто' }); }
     return r;
+  }
+
+  // ---------- Графіки статистики ----------
+  function charts() {
+    var seen = list('seen').filter(function (it) { return it.seenAt; }), now = new Date(FB.now());
+    var yr = {}; seen.forEach(function (it) { var y = new Date(it.seenAt).getFullYear(); yr[y] = (yr[y] || 0) + 1; });
+    var years = Object.keys(yr).map(Number).sort(function (a, b) { return a - b; }).slice(-6).map(function (y) { return { k: String(y), n: yr[y] }; });
+    var months = [], MS = ['січ', 'лют', 'бер', 'кві', 'тра', 'чер', 'лип', 'сер', 'вер', 'жов', 'лис', 'гру'];
+    for (var i = 11; i >= 0; i--) {
+      var d = new Date(now.getFullYear(), now.getMonth() - i, 1), from = d.getTime(), to = new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime();
+      months.push({ k: MS[d.getMonth()], n: seen.filter(function (it) { return it.seenAt >= from && it.seenAt < to; }).length });
+    }
+    var gm = {}; seen.forEach(function (it) { it.genre.forEach(function (g) { gm[g] = (gm[g] || 0) + 1; }); });
+    var gs = Object.keys(gm).sort(function (a, b) { return gm[b] - gm[a] || a.localeCompare(b); }).slice(0, 6).map(function (g) { return { k: genreUk(g), n: gm[g] }; });
+    var rt = []; for (var r = 1; r <= 10; r++) rt.push({ k: String(r), n: 0 });
+    Object.keys(S.items).forEach(function (k) { var m = S.items[k].myRating; if (m >= 1 && m <= 10) rt[m - 1].n++; });
+    return { years: years, months: months, genres: gs, ratings: rt, total: seen.length };
   }
 
   // ---------- Підсумок року ----------
@@ -762,7 +824,7 @@
     VERSION: VERSION, init: init, on: on, save: save, isSaveFailed: function () { return saveFailed; },
     newEpisodes: newEpisodes, markEpisodeSeen: markEpisodeSeen, upcoming: upcoming, refreshSeries: refreshSeries, duoPick: duoPick, records: records, ymd: ymd,
     discover: discover, person: person, advise: advise, findTmdb: findTmdb, colList: colList, addCol: addCol, renameCol: renameCol, removeCol: removeCol, toggleCol: toggleCol, colItems: colItems, nextForMe: nextForMe, epCode: epCode, yearStats: yearStats, syncOf: syncOf, setSync: setSync, syncNow: syncNow, mergeIn: mergeIn,
-    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, tmdbImdbId: tmdbImdbId, collDefs: collDefs, collection: collection, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
+    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
     getItem: getItem, setStatus: setStatus, setMyRating: setMyRating, setNote: setNote, removeItem: removeItem, restoreItem: restoreItem, refresh: refresh,
     toggleEpisode: toggleEpisode, setSeasonWatched: setSeasonWatched, seasonProgress: seasonProgress, watchedCount: watchedCount,
     list: list, genres: genres, randomPick: randomPick, stats: stats, fmtMinutes: fmtMinutes, SORTS: SORTS, brief: brief,
