@@ -126,12 +126,17 @@
   }
   function ago(d) { return d <= 0 ? 'сьогодні' : d === 1 ? 'вчора' : d + ' ' + plural(d, 'день', 'дні', 'днів') + ' тому'; }
   function newsHtml() {
-    var n0 = F.newEpisodes(); if (!n0.length) return '';
+    var n0 = F.newSeasons().concat(F.newEpisodes()); if (!n0.length) return '';
     var n = ui.allNews ? n0 : n0.slice(0, 3);
     return '<section class="news"><div class="sec-h"><h2>Вийшло нове</h2>' + (n0.length > 3 ? '<button class="more-link" data-act="showall" data-k="allNews">' + (ui.allNews ? 'Згорнути' : 'Усі ' + n0.length) + '</button>' : '') + '</div>' + n.map(function (x) {
+      if (!x.ep) return seasonRow(x);
       return '<div class="newrow glow" style="--h:' + hue(x.item.id) + '"><button class="nopen" data-act="open" data-id="' + x.item.id + '"><span class="poster"><span class="ph">' + esc(x.item.title) + '</span>' + (x.item.poster ? '<img src="' + esc(x.item.poster) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') + '</span><span class="nt"><b>' + esc(x.item.titleUk || x.item.title) + '</b><span>Серія S' + x.ep.s + 'E' + x.ep.e + (x.ep.name ? ', ' + esc(x.ep.name) : '') + '</span><span class="when">' + ago(x.days) + '</span></span></button>' +
         '<button class="chip" data-act="markep" data-id="' + x.item.id + '" data-s="' + x.ep.s + '" data-e="' + x.ep.e + '" aria-label="Уже переглянув серію">' + ic('check', 'sm') + 'Бачив</button></div>';
     }).join('') + '</section>';
+  }
+  function seasonRow(x) {
+    return '<div class="newrow glow nseason" style="--h:' + hue(x.item.id) + '"><button class="nopen" data-act="open" data-id="' + x.item.id + '"><span class="poster"><span class="ph">' + esc(x.item.title) + '</span>' + (x.item.poster ? '<img src="' + esc(x.item.poster) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') + '</span><span class="nt"><b>' + esc(x.item.titleUk || x.item.title) + '</b><span>Новий сезон ' + x.s + '</span><span class="when">' + ago(Math.max(0, x.days)) + '</span></span></button>' +
+      '<span class="nacts"><button class="chip on" data-act="resume" data-id="' + x.item.id + '">' + ic('play', 'sm') + 'Дивлюсь</button><button class="chip ghost-x" data-act="skipseason" data-id="' + x.item.id + '" aria-label="Не цікаво, сховати">' + ic('x', 'sm') + '</button></span></div>';
   }
   function soonHtml() {
     var u0 = F.upcoming(); if (!u0.length) return '';
@@ -289,7 +294,7 @@
     if (status === 'seen') {
       var num = it.myRating ? '<b class="me">' + it.myRating + '</b><i>з 10</i>' : (it.type === 'series' && F.watchedCount(it) ? '<b class="done">' + F.watchedCount(it) + '</b><i>еп.</i>' : '<b class="none">—</b><i>без оцінки</i>');
       var when = it.seenAt ? new Date(it.seenAt).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
-      return '<button class="card stub glow"' + st + ' data-act="open" data-id="' + it.id + '"><span class="poster"><span class="ph">' + esc(it.title) + '</span>' + img + '</span><span class="mid"><span class="name">' + nm + '</span><span class="yr">' + esc(it.year) + (it.ratings.imdb != null ? ', IMDb ' + it.ratings.imdb.toFixed(1) : '') + '</span>' + (when ? '<span class="when">' + esc(when) + '</span>' : '') + '</span><span class="num">' + num + '</span></button>';
+      return '<button class="card stub glow"' + st + ' data-act="open" data-id="' + it.id + '"><span class="poster"><span class="ph">' + esc(it.title) + '</span>' + img + (F.hasNewSeason(it) ? '<span class="nsflag">Новий сезон</span>' : '') + '</span><span class="mid"><span class="name">' + nm + '</span><span class="yr">' + esc(it.year) + (it.ratings.imdb != null ? ', IMDb ' + it.ratings.imdb.toFixed(1) : '') + '</span>' + (when ? '<span class="when">' + esc(when) + '</span>' : '') + '</span><span class="num">' + num + '</span></button>';
     }
     var b = '';
     if (it.ratings.imdb != null) b += '<span>' + it.ratings.imdb.toFixed(1) + '</span>';
@@ -747,6 +752,8 @@
       case 'tab': setTab(el.dataset.tab); break;
       case 'hometype': ui.homeMt = el.dataset.mt === 'tv' ? 'tv' : el.dataset.mt === 'toon' ? 'toon' : 'movie'; ui.enter = true; render(); break;
       case 'homeview': ui.homeView = el.dataset.v === 'mine' ? 'mine' : 'cat'; try { localStorage.setItem('kinoman_home_view', ui.homeView); } catch (e) { /* без збереження */ } ui.enter = true; render(); window.scrollTo(0, 0); break;
+      case 'resume': { var ri = F.getItem(el.dataset.id); if (ri) { F.setStatus(ri, 'watching'); toast('«' + (ri.titleUk || ri.title) + '» знову в «Дивлюсь»'); } break; }
+      case 'skipseason': { var si = F.getItem(el.dataset.id); if (si) { var prevS = si.doneS; F.skipSeason(si.id); toast('Сховано. Нагадаю про наступний сезон', 'Повернути', function () { F.skipSeason(si.id, prevS); }); } break; }
       case 'showall': if (el.dataset.k === 'allNews' || el.dataset.k === 'allSoon') { ui[el.dataset.k] = !ui[el.dataset.k]; render(); } break;
       case 'moreshelves': ui.cat.shown[ui.homeMt] += 5; render(); break;
       case 'reshelf': { var rs = F.collDefs(ui.homeMt).filter(function (d) { return d.id === el.dataset.id; })[0]; if (rs) { delete ui.cat.sh[rs.id]; loadShelf(rs); paintShelf(rs); } break; }
@@ -949,7 +956,7 @@
     try { ui.hideSeen = localStorage.getItem('kinoman_hide_seen') === '1'; } catch (e) { /* без збереження */ }
     var hv = ''; try { hv = localStorage.getItem('kinoman_home_view') || ''; } catch (e) { /* без збереження */ }
     // без збереженого вибору: «Моє», якщо там щось є, інакше каталог
-    ui.homeView = hv === 'mine' || hv === 'cat' ? hv : (F.list('watching').length || F.newEpisodes().length || F.upcoming().length || F.colList().length ? 'mine' : 'cat');
+    ui.homeView = hv === 'mine' || hv === 'cat' ? hv : (F.list('watching').length || F.newEpisodes().length || F.newSeasons().length || F.upcoming().length || F.colList().length ? 'mine' : 'cat');
     setTimeout(autoSync, 800);
     setTimeout(function () { if (F.tmdbKeyOf()) F.refreshSeries(6).then(function (n) { if (n) render(); }, function () { /* без інтернету */ }).then(function () { return F.fillTmdbIds(8); }).then(function (n) { if (n) render(); }, function () { /* без інтернету */ }); warmPosters(); }, 2500);
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') autoSync(); });

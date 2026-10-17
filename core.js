@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v16';
+  var VERSION = 'v18';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -27,6 +27,7 @@
   function imgPath(p) { p = String(p || ''); return /^\/[\w-]{5,60}\.(jpg|jpeg|png|webp)$/.test(p) ? p : ''; }
   function cleanCast(a) { return (Array.isArray(a) ? a : []).slice(0, 20).map(function (c) { return c && c.name ? { id: Math.max(0, Math.floor(Number(c.id) || 0)), name: String(c.name).slice(0, 80), character: String(c.character || '').slice(0, 100), photo: imgPath(c.photo) } : null; }).filter(Boolean); }
   function cleanSeasonEps(o) { var r = {}; if (o && typeof o === 'object') Object.keys(o).slice(0, 100).forEach(function (k) { var n = Math.floor(Number(o[k])); if (/^\d{1,3}$/.test(k) && Number(k) > 0 && n > 0 && n < 1000) r[k] = n; }); return r; }
+  function cleanSeasonAir(o) { var r = {}; if (o && typeof o === 'object') Object.keys(o).slice(0, 100).forEach(function (k) { if (/^\d{1,3}$/.test(k) && Number(k) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(String(o[k]))) r[k] = String(o[k]); }); return r; }
   function cleanNextAir(o) { if (!o || !/^\d{4}-\d{2}-\d{2}$/.test(String(o.date))) return null; var sn = Math.floor(Number(o.s)), en = Math.floor(Number(o.e)); return { date: String(o.date), s: sn > 0 ? sn : 0, e: en > 0 ? en : 0, name: String(o.name || '').slice(0, 120) }; }
   function cleanRecs(a) { return (Array.isArray(a) ? a : []).slice(0, 20).map(function (r) { var id = Math.floor(Number(r && r.tid) || 0); return id > 0 && r.title ? { tid: id, mt: r.mt === 'tv' ? 'tv' : 'movie', title: String(r.title).slice(0, 120), year: /^\d{4}$/.test(String(r.year)) ? String(r.year) : '', poster: imgPath(r.poster) } : null; }).filter(Boolean); }
   function normalizeItem(x) {
@@ -48,7 +49,7 @@
       totalSeasons: Math.max(0, Math.min(100, Number(x.totalSeasons) || 0)),
       tmdbId: Number(x.tmdbId) > 0 ? Math.floor(Number(x.tmdbId)) : 0, mt: x.mt === 'tv' ? 'tv' : x.mt === 'movie' ? 'movie' : '', cast: cleanCast(x.cast), recs: cleanRecs(x.recs),
       titleUk: String(x.titleUk || '').slice(0, 200), plotUk: String(x.plotUk || '').slice(0, 2500),
-      trailer: /^[\w-]{11}$/.test(String(x.trailer || '')) ? String(x.trailer) : '', seasonEps: cleanSeasonEps(x.seasonEps), nextAir: cleanNextAir(x.nextAir), lastAir: cleanNextAir(x.lastAir), planAt: /^\d{4}-\d{2}-\d{2}$/.test(String(x.planAt || '')) ? String(x.planAt) : '', tvStatus: String(x.tvStatus || '').slice(0, 40),
+      trailer: /^[\w-]{11}$/.test(String(x.trailer || '')) ? String(x.trailer) : '', seasonEps: cleanSeasonEps(x.seasonEps), nextAir: cleanNextAir(x.nextAir), lastAir: cleanNextAir(x.lastAir), planAt: /^\d{4}-\d{2}-\d{2}$/.test(String(x.planAt || '')) ? String(x.planAt) : '', tvStatus: String(x.tvStatus || '').slice(0, 40), seasonAir: cleanSeasonAir(x.seasonAir), doneS: Math.max(0, Math.min(100, Math.floor(Number(x.doneS)) || 0)),
       xv: Number(x.xv) || 0, exAt: Number(x.exAt) || 0, cols: Array.isArray(x.cols) ? x.cols.map(String).filter(function (c) { return /^c[\w]{1,24}$/.test(c); }).slice(0, 50) : [],
       status: x.status === 'seen' ? 'seen' : x.status === 'watching' ? 'watching' : 'want', myRating: my, note: String(x.note || '').slice(0, 1000),
       addedAt: Number(x.addedAt) || 0, seenAt: Number(x.seenAt) || 0, updatedAt: Number(x.updatedAt) || 0, fetchedAt: Number(x.fetchedAt) || 0,
@@ -206,15 +207,16 @@
     var title = clean(mt === 'tv' ? d.name : d.title), orig = clean(mt === 'tv' ? d.original_name : d.original_title);
     var vids = ((d.videos && d.videos.results) || []).filter(function (v) { return v && v.site === 'YouTube' && /^[\w-]{11}$/.test(String(v.key)) && (v.type === 'Trailer' || v.type === 'Teaser'); });
     vids.sort(function (a, b) { var sc = function (v) { return (v.iso_639_1 === 'uk' ? 0 : v.iso_639_1 === 'en' ? 2 : 4) + (v.type === 'Trailer' ? 0 : 1) - (v.official ? 0.5 : 0); }; return sc(a) - sc(b); });
-    var seasonEps = {}; (Array.isArray(d.seasons) ? d.seasons : []).forEach(function (x) { if (x && x.season_number > 0 && x.episode_count > 0) seasonEps[x.season_number] = x.episode_count; });
+    var seasonEps = {}, seasonAir = {}; (Array.isArray(d.seasons) ? d.seasons : []).forEach(function (x) { if (x && x.season_number > 0 && x.episode_count > 0) seasonEps[x.season_number] = x.episode_count; if (x && x.season_number > 0 && x.air_date) seasonAir[x.season_number] = x.air_date; });
     var na = d.next_episode_to_air, la = d.last_episode_to_air;
     var tvx = mt === 'tv' ? { seasonEps: cleanSeasonEps(seasonEps), nextAir: na ? cleanNextAir({ date: na.air_date, s: na.season_number, e: na.episode_number, name: na.name }) : null, tvStatus: String(d.status || '') } : { seasonEps: {}, nextAir: null, tvStatus: '' };
     var lastAir = mt === 'tv' && la ? cleanNextAir({ date: la.air_date, s: la.season_number, e: la.episode_number, name: la.name }) : null;
-    return { xv: 3, lastAir: lastAir, trailer: vids[0] ? vids[0].key : '', seasonEps: tvx.seasonEps, nextAir: tvx.nextAir, tvStatus: tvx.tvStatus, tmdbId: hit.id, mt: mt, titleUk: title && title !== it.title && /[Ѐ-ӿ]/.test(title) ? title : '', plotUk: /[Ѐ-ӿ]/.test(String(d.overview || '')) ? String(d.overview).trim().slice(0, 2500) : '', cast: cast, recs: recs };
+    return { xv: 3, seasonAir: mt === 'tv' ? cleanSeasonAir(seasonAir) : {}, lastAir: lastAir, trailer: vids[0] ? vids[0].key : '', seasonEps: tvx.seasonEps, nextAir: tvx.nextAir, tvStatus: tvx.tvStatus, tmdbId: hit.id, mt: mt, titleUk: title && title !== it.title && /[Ѐ-ӿ]/.test(title) ? title : '', plotUk: /[Ѐ-ӿ]/.test(String(d.overview || '')) ? String(d.overview).trim().slice(0, 2500) : '', cast: cast, recs: recs };
   }
   function setExtras(id, ex) {
     var it = S.items[id]; if (!it || !ex || ex.none) return;
-    it.tmdbId = ex.tmdbId; it.mt = ex.mt; it.cast = ex.cast; it.recs = ex.recs; it.trailer = ex.trailer || ''; it.seasonEps = ex.seasonEps || {}; it.nextAir = ex.nextAir || null; it.lastAir = ex.lastAir || null; it.tvStatus = ex.tvStatus || ''; it.xv = ex.xv || 0; it.exAt = FB.now();
+    it.tmdbId = ex.tmdbId; it.mt = ex.mt; it.cast = ex.cast; it.recs = ex.recs; it.trailer = ex.trailer || ''; it.seasonEps = ex.seasonEps || {}; it.nextAir = ex.nextAir || null; it.lastAir = ex.lastAir || null; it.tvStatus = ex.tvStatus || ''; it.seasonAir = ex.seasonAir || {}; it.xv = ex.xv || 0; it.exAt = FB.now();
+    if (it.status === 'seen' && it.type === 'series' && !it.doneS) it.doneS = airedSeason(it, it.seenAt);
     if (ex.titleUk && !it.titleUk) it.titleUk = ex.titleUk;
     if (ex.plotUk && !it.plotUk) it.plotUk = ex.plotUk;
     it.updatedAt = stamp(it.updatedAt); save(true);
@@ -257,6 +259,11 @@
       add('c-pop', 'Мультфільми: популярні', 'movie', '/discover/movie', { with_genres: '16' }, 1);
       add('c-new', 'Нові мультфільми', 'movie', '/discover/movie', ext({ with_genres: '16' }, dates('movie', yAgo, '')), 1);
       add('c-top', 'Топ 100 мультфільмів за рейтингом', 'movie', '/discover/movie', best(1000, { with_genres: '16' }), 1, 100);
+      // Топ 100 за віком: вікові рейтинги США (у TMDB вони є майже для всіх мультфільмів)
+      add('c-age0', 'Топ 100 для малечі (0+)', 'movie', '/discover/movie', best(150, { with_genres: '16', certification_country: 'US', certification: 'G' }), 1, 100);
+      add('c-age6', 'Топ 100 для дітей (6+)', 'movie', '/discover/movie', best(300, { with_genres: '16', certification_country: 'US', certification: 'PG' }), 1, 100);
+      add('c-age12', 'Топ 100 для підлітків (12+)', 'movie', '/discover/movie', best(100, { with_genres: '16', certification_country: 'US', certification: 'PG-13' }), 1, 100);
+      add('c-age16', 'Топ 100 для дорослих (16+)', 'movie', '/discover/movie', best(50, { with_genres: '16', certification_country: 'US', certification: 'R|NC-17' }), 1, 100);
       add('c-fam', 'Для всієї родини', 'movie', '/discover/movie', { with_genres: '16,10751' }, 1);
       add('c-old', 'Класичні мультфільми', 'movie', '/discover/movie', best(500, ext({ with_genres: '16' }, dates('movie', '', '1999-12-31'))), 1);
       add('c-spop', 'Мультсеріали: популярні', 'tv', '/discover/tv', { with_genres: '16' }, 1);
@@ -548,7 +555,7 @@
   function setStatus(fresh, status) {
     if (status !== 'want' && status !== 'seen' && status !== 'watching') return null;
     var it = S.items[fresh.id] ? S.items[fresh.id] : addOrUpdate(fresh, status);
-    if (it.status !== status) { it.status = status; it.seenAt = status === 'seen' ? FB.now() : 0; it.updatedAt = stamp(it.updatedAt); save(); }
+    if (it.status !== status) { it.status = status; it.seenAt = status === 'seen' ? FB.now() : 0; if (status === 'seen' && it.type === 'series') it.doneS = airedSeason(it, 0); it.updatedAt = stamp(it.updatedAt); save(); }
     return it;
   }
   function setMyRating(id, n) {
@@ -675,12 +682,33 @@
     });
     return out.sort(function (a, b) { return a.days - b.days; });
   }
+  // Останній сезон, що вже стартував на дату (за замовчуванням сьогодні)
+  function airedSeason(it, at) {
+    var ref = ymd(at || FB.now()), best = 0, sa = it.seasonAir || {};
+    Object.keys(sa).forEach(function (k) { if (sa[k] <= ref && Number(k) > best) best = Number(k); });
+    if (!best && it.lastAir && it.lastAir.s && it.lastAir.date <= ref) best = it.lastAir.s;
+    return best;
+  }
+  // Новий сезон у переглянутому серіалі
+  function newSeasons() {
+    var today = ymd(FB.now()), out = [];
+    list('seen').forEach(function (it) {
+      if (it.type !== 'series' || !it.doneS) return;
+      var s = airedSeason(it, 0); if (s <= it.doneS) return;
+      var d = (it.seasonAir || {})[it.doneS + 1] || (it.lastAir && it.lastAir.date) || today;
+      out.push({ item: it, s: s, date: d, days: daysBetween(d, today) });
+    });
+    return out.sort(function (a, b) { return a.days - b.days; });
+  }
+  function hasNewSeason(it) { return !!(it && it.status === 'seen' && it.type === 'series' && it.doneS && airedSeason(it, 0) > it.doneS); }
+  function skipSeason(id, to) { var it = S.items[id]; if (!it) return; it.doneS = to != null ? Math.max(0, Math.floor(Number(to)) || 0) : Math.max(it.doneS, airedSeason(it, 0)); it.updatedAt = stamp(it.updatedAt); save(); }
   function markEpisodeSeen(id, s, e) { var it = S.items[id]; if (!it) return; it.watched[epKey(s, e)] = 1; it.updatedAt = stamp(it.updatedAt); save(); }
   // Скоро: наступні серії й прем'єри фільмів з «Обраних»
   function upcoming() {
     var today = ymd(FB.now()), out = [];
     Object.keys(S.items).forEach(function (k) {
-      var it = S.items[k]; if (it.status === 'seen') return;
+      var it = S.items[k];
+      if (it.status === 'seen') { var nx = it.nextAir; if (it.type === 'series' && it.doneS && nx && nx.s > it.doneS && nx.date >= today && daysBetween(today, nx.date) <= 365) out.push({ item: it, date: nx.date, label: nx.e > 1 ? 'S' + nx.s + 'E' + nx.e : 'Сезон ' + nx.s }); return; }
       if (it.type === 'series') { var na = it.nextAir; if (na && na.date >= today && daysBetween(today, na.date) <= 180) out.push({ item: it, date: na.date, label: na.s ? 'S' + na.s + 'E' + na.e : 'Нова серія' }); }
       else if (it.status === 'want') { var r = releasedIso(it.released); if (r && r >= today && daysBetween(today, r) <= 365) out.push({ item: it, date: r, label: 'Прем’єра' }); }
     });
@@ -692,7 +720,7 @@
   async function refreshSeries(max) {
     if (refreshing || !tmdbKeyOf()) return 0; refreshing = true; var n = 0;
     try {
-      var due = Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { return it.type === 'series' && (it.status === 'watching' || it.status === 'want') && FB.now() - it.exAt > 21600000; }).slice(0, max || 12);
+      var due = Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { if (it.type !== 'series') return false; if (it.status === 'seen') return !/^(Ended|Canceled)$/.test(it.tvStatus) && FB.now() - it.exAt > 86400000; return FB.now() - it.exAt > 21600000; }).sort(function (a, b) { return (a.status === 'seen') - (b.status === 'seen'); }).slice(0, max || 12);
       for (var i = 0; i < due.length; i++) {
         try { var ex = await tmdbExtras(due[i]); if (ex && !ex.none && S.items[due[i].id]) { setExtras(due[i].id, ex); n++; } else if (S.items[due[i].id]) S.items[due[i].id].exAt = FB.now(); }
         catch (e) { if (e && (e.code === 'TMDB_NETWORK' || (e.code === 'TMDB_HTTP' && e.status === 401))) break; }
@@ -822,7 +850,7 @@
 
   Object.assign(FB, {
     VERSION: VERSION, init: init, on: on, save: save, isSaveFailed: function () { return saveFailed; },
-    newEpisodes: newEpisodes, markEpisodeSeen: markEpisodeSeen, upcoming: upcoming, refreshSeries: refreshSeries, duoPick: duoPick, records: records, ymd: ymd,
+    newEpisodes: newEpisodes, newSeasons: newSeasons, hasNewSeason: hasNewSeason, skipSeason: skipSeason, markEpisodeSeen: markEpisodeSeen, upcoming: upcoming, refreshSeries: refreshSeries, duoPick: duoPick, records: records, ymd: ymd,
     discover: discover, person: person, advise: advise, findTmdb: findTmdb, colList: colList, addCol: addCol, renameCol: renameCol, removeCol: removeCol, toggleCol: toggleCol, colItems: colItems, nextForMe: nextForMe, epCode: epCode, yearStats: yearStats, syncOf: syncOf, setSync: setSync, syncNow: syncNow, mergeIn: mergeIn,
     keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
     getItem: getItem, setStatus: setStatus, setMyRating: setMyRating, setNote: setNote, removeItem: removeItem, restoreItem: restoreItem, refresh: refresh,
