@@ -8,7 +8,7 @@
     tab: 'search',
     q: '', type: '', results: [], total: 0, page: 0, loading: false, searched: false, error: null, token: 0,
     lists: { want: { sort: 'added', type: '', genre: '' }, seen: { sort: 'seen', type: '', genre: '' } },
-    busy: {}, sheet: null, keyMsg: null, backupMsg: null
+    busy: {}, stack: [], sheet: null, tmdbMsg: null, keyMsg: null, backupMsg: null
   };
   var detCache = {};
   var TABS = [['search', 'Пошук', 'search'], ['want', 'Хочу', 'bookmark'], ['seen', 'Переглянуто', 'eye'], ['more', 'Ще', 'more']];
@@ -107,6 +107,11 @@
     h += '<p style="margin:10px 0 0"><button class="btn ghost sm" data-act="testkey"' + (hasKey ? '' : ' disabled') + '>Перевірити ключ</button></p>';
     if (ui.keyMsg) h += '<p class="' + (ui.keyMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.keyMsg.text) + '</p>';
     h += '<p class="fine">Ключ зберігається лише в цьому телефоні й не потрапляє в копію даних. OMDb приймає ключ лише в адресі запиту, тому нікому його не показуйте й не публікуйте.</p></section>';
+    h += '<section class="panel"><h2>TMDB (необов’язково)</h2><p class="sub" style="margin:0 0 10px">З ключем TMDB у картці фільму з’являються склад акторів із фото, схожі фільми та українські назви й описи. Безкоштовний ключ: <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a>. Підійде довгий «API Read Access Token» або короткий «API Key».</p>';
+    h += '<form class="keyrow" data-form="tmdbkey"><input type="text" id="tmdbkey" name="tmdbkey" value="' + esc(F.tmdbKeyOf()) + '" placeholder="Ключ TMDB" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Ключ TMDB"><button class="btn" type="submit">Зберегти</button></form>';
+    h += '<p style="margin:10px 0 0"><button class="btn ghost sm" data-act="testtmdb"' + (F.tmdbKeyOf() ? '' : ' disabled') + '>Перевірити ключ</button></p>';
+    if (ui.tmdbMsg) h += '<p class="' + (ui.tmdbMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.tmdbMsg.text) + '</p>';
+    h += '<p class="fine">Ключ зберігається лише в цьому телефоні й не потрапляє в копію даних. Цей додаток використовує TMDB API, але не схвалений і не сертифікований TMDB.</p></section>';
     h += '<section class="panel"><h2>Gemini (необов’язково)</h2><p class="sub" style="margin:0 0 10px">З ключем Gemini можна шукати фільми українською та перекладати сюжет. Без нього все працює, але назви треба вводити англійською.</p>';
     h += '<form class="keyrow" data-form="gemkey"><input type="text" id="gemkey" name="gemkey" value="' + esc(F.gemKeyOf()) + '" placeholder="Ключ Gemini" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Ключ Gemini"><button class="btn" type="submit">Зберегти</button></form>';
     h += '<p style="margin:10px 0 0;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost sm" data-act="testgem"' + (F.gemKeyOf() ? '' : ' disabled') + '>Перевірити ключ</button>' + (!F.gemKeyOf() && F.foreignGemKey() ? '<button class="btn soft sm" data-act="usenutri">Взяти ключ із NutriPlan</button>' : '') + '</p>';
@@ -149,12 +154,31 @@
     return h;
   }
   function sheetTr(sh, lib, it) {
+    var ex = sh.extras && sh.extras.data;
     if (lib && (lib.plotUk || lib.titleUk)) return { titleUk: lib.titleUk, plotUk: lib.plotUk };
-    return sh.tr || { titleUk: '', plotUk: '' };
+    var t = sh.tr || {}; return { titleUk: t.titleUk || (ex && ex.titleUk) || '', plotUk: t.plotUk || (ex && ex.plotUk) || '' };
+  }
+  function initials(n) { return String(n).split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0); }).join('').toUpperCase(); }
+  function castBlock(sh, lib) {
+    if (!F.tmdbKeyOf()) return '<div class="notice">' + ic('film') + '<div><b>Актори з фото й схожі фільми</b><div class="sub">Додайте безкоштовний ключ TMDB у розділі «Ще», і тут з’являться склад, ролі та добірка схожого.</div><p style="margin:10px 0 0"><button class="btn sm" data-act="sheet-more">Додати ключ TMDB</button></p></div></div>';
+    var ex = sh.extras || {}, cast = lib && lib.cast.length ? lib.cast : (ex.data && ex.data.cast) || [];
+    if (cast.length) return '<h2>Актори</h2><div class="strip">' + cast.map(function (c) {
+      return '<a class="person" ' + (c.id ? 'href="https://www.themoviedb.org/person/' + c.id + '" target="_blank" rel="noopener"' : '') + '><span class="pic"><span class="ph">' + esc(initials(c.name)) + '</span>' + (c.photo ? '<img src="' + esc(F.tmdbImg(c.photo, 'w185')) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') + '</span><b>' + esc(c.name) + '</b>' + (c.character ? '<span>' + esc(c.character) + '</span>' : '') + '</a>';
+    }).join('') + '</div>';
+    if (ex.loading) return '<div class="spin" role="status" aria-label="Завантажуємо акторів"></div>';
+    if (ex.error) return '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(ex.error)) + '<p style="margin:10px 0 0"><button class="btn sm" data-act="extras">Спробувати ще раз</button></p></div></div>';
+    return '';
+  }
+  function recsBlock(sh, lib) {
+    var ex = sh.extras || {}, recs = lib && lib.recs.length ? lib.recs : (ex.data && ex.data.recs) || [];
+    if (!recs.length) return '';
+    return '<h2>Схожі фільми й серіали</h2><div class="strip">' + recs.map(function (r) {
+      return '<button class="rec" data-act="rec" data-mt="' + r.mt + '" data-tid="' + r.tid + '"><span class="poster"><span class="ph">' + esc(r.title) + '</span>' + (r.poster ? '<img src="' + esc(F.tmdbImg(r.poster, 'w185')) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') + '</span><span class="name">' + esc(r.title) + '</span><span class="yr">' + esc(r.year) + (r.mt === 'tv' ? ', серіал' : '') + '</span></button>';
+    }).join('') + '</div>';
   }
   function sheetHtml() {
     var sh = ui.sheet, lib = F.getItem(sh.id), it = lib || sh.item;
-    var hdr = '<button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button>';
+    var hdr = '<div class="sheetbar">' + (ui.stack.length ? '<button class="back" data-act="back" aria-label="Назад">' + ic('left') + '</button>' : '') + '<button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button></div>';
     if (!it) {
       var b = sh.brief;
       return hdr + '<div class="hero"><div class="in">' + posterHtml(b && b.poster, b ? b.title : '') + '<div class="info"><h3>' + esc(b ? b.title : '') + '</h3><div class="meta">' + (b ? esc(typeLabel(b.type)) + (b.year ? ', ' + esc(b.year) : '') : '') + '</div></div></div></div><div class="body">' +
@@ -179,9 +203,11 @@
       else if (sh.translating) h += '<div class="spin" role="status" aria-label="Перекладаємо"></div>';
       else h += '<p style="margin:0"><button class="btn ghost sm" data-act="translate">' + ic('sparkle', 'sm') + 'Перекласти українською</button></p>' + (sh.trError ? '<p class="er-t" role="status" style="margin:8px 0 0">' + esc(sh.trError) + '</p>' : '');
     }
-    var dl = dlRow('Режисер', it.director) + dlRow('Сценарій', it.writer) + dlRow('У ролях', it.actors) + dlRow('Вихід', F.dateUk(it.released)) + dlRow('Країна', F.countryUk(it.country)) + dlRow('Мова', F.langUk(it.language)) + dlRow('Нагороди', it.awards);
+    h += castBlock(sh, lib);
+    var dl = dlRow('Режисер', it.director) + dlRow('Сценарій', it.writer) + dlRow('У ролях', (lib && lib.cast.length) || (sh.extras && sh.extras.data && sh.extras.data.cast.length) ? '' : it.actors) + dlRow('Вихід', F.dateUk(it.released)) + dlRow('Країна', F.countryUk(it.country)) + dlRow('Мова', F.langUk(it.language)) + dlRow('Нагороди', it.awards);
     if (dl) h += '<dl class="dl">' + dl + '</dl>';
     h += seasonBlock(sh, it, lib);
+    h += recsBlock(sh, lib);
     h += '<div class="actions"><a class="btn ghost sm" href="https://www.imdb.com/title/' + esc(it.id) + '/" target="_blank" rel="noopener">' + ic('link', 'sm') + 'Відкрити в IMDb</a>';
     if (lib) h += '<button class="btn ghost sm" data-act="refresh"' + (sh.refreshing ? ' disabled' : '') + '>' + ic('refresh', 'sm') + (sh.refreshing ? 'Оновлюємо…' : 'Оновити рейтинги') + '</button><button class="btn danger sm" data-act="remove">' + ic('trash', 'sm') + 'Видалити зі списків</button>';
     h += '</div>';
@@ -190,6 +216,7 @@
     return h + '</div>';
   }
   function renderSheet() {
+    syncExtras();
     if (!ui.sheet) { sheetRoot.innerHTML = ''; document.body.style.overflow = ''; return; }
     var old = $('.sheet', sheetRoot), top = old ? old.scrollTop : 0, again = !!old;
     sheetRoot.innerHTML = '<div class="scrim' + (again ? ' static' : '') + '" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="' + esc((ui.sheet.item || ui.sheet.brief || {}).title || 'Картка') + '">' + sheetHtml() + '</div></div>';
@@ -201,14 +228,31 @@
     var lib = F.getItem(id);
     ui.sheet = { id: id, brief: brief || (lib ? F.brief(lib) : null), item: lib || detCache[id] || null, error: null, season: 0, tmp: {}, loadingSeason: 0, seasonError: null, refreshing: false };
     renderSheet();
-    if (!ui.sheet.item) await loadSheetItem();
+    if (!ui.sheet.item) await loadSheetItem(); else loadExtras(false);
   }
   async function loadSheetItem() {
     var sh = ui.sheet; if (!sh) return; sh.error = null;
-    try { var it = await F.details(sh.id); detCache[sh.id] = it; if (ui.sheet === sh) { sh.item = it; renderSheet(); } }
+    try { var it = await F.details(sh.id); detCache[sh.id] = it; if (ui.sheet === sh) { sh.item = it; renderSheet(); loadExtras(false); } }
     catch (e) { if (ui.sheet === sh) { sh.error = e; renderSheet(); } }
   }
-  function closeSheet() { ui.sheet = null; renderSheet(); }
+  function closeSheet() { ui.sheet = null; ui.stack = []; renderSheet(); }
+  async function loadExtras(force) {
+    var sh = ui.sheet; if (!sh || !F.tmdbKeyOf()) return; var it = sheetItem(); if (!it) return;
+    var lib = F.getItem(it.id);
+    if (!force && ((lib && (lib.cast.length || lib.recs.length)) || (sh.extras && (sh.extras.data || sh.extras.loading)))) return;
+    sh.extras = { loading: true, error: null, data: null }; renderSheet();
+    try {
+      var d = await F.tmdbExtras(it);
+      if (ui.sheet !== sh) return;
+      sh.extras = { loading: false, error: null, data: d.none ? null : d };
+      if (F.getItem(it.id) && !d.none) F.setExtras(it.id, d);
+    } catch (e) { if (ui.sheet !== sh) return; sh.extras = { loading: false, error: e, data: null }; }
+    renderSheet(); render();
+  }
+  function syncExtras() {
+    var sh = ui.sheet; if (!sh || !sh.extras || !sh.extras.data) return;
+    var lib = F.getItem(sh.id); if (lib && !lib.cast.length && !lib.recs.length) F.setExtras(sh.id, sh.extras.data);
+  }
   function sheetItem() { var sh = ui.sheet; return sh ? (sh.item || F.getItem(sh.id)) : null; }
   function ensureInLibrary(st) { var sh = ui.sheet, it = sheetItem(); if (!it) return null; return F.setStatus(it, st || 'want'); }
   async function loadSeasonNow(n) {
@@ -228,7 +272,7 @@
     tabsEl.innerHTML = TABS.map(function (t) { return '<button data-act="tab" data-tab="' + t[0] + '"' + (st === t[0] ? ' aria-current="page"' : '') + '>' + ic(t[2]) + '<span>' + t[1] + '</span>' + (t[0] === 'want' && wc ? '<span class="cnt">' + wc + '</span>' : '') + '</button>'; }).join('');
     if (ui.sheet) renderSheet();
   }
-  function setTab(t) { ui.tab = t; ui.keyMsg = null; ui.backupMsg = null; ui.gemMsg = null; render(); window.scrollTo(0, 0); }
+  function setTab(t) { ui.tab = t; ui.keyMsg = null; ui.backupMsg = null; ui.gemMsg = null; ui.tmdbMsg = null; render(); window.scrollTo(0, 0); }
 
   // ---------- Події ----------
   async function onAct(el) {
@@ -260,6 +304,20 @@
         else if (F.getItem(it1.id).status === 'want' && F.getItem(it1.id).myRating == null) F.setStatus(F.getItem(it1.id), 'seen');
         F.setMyRating(it1.id, Number(el.dataset.n)); break;
       }
+      case 'sheet-more': closeSheet(); setTab('more'); break;
+      case 'extras': loadExtras(true); break;
+      case 'back': { var prev = ui.stack.pop(); if (prev) openSheet(prev.id, prev.brief); break; }
+      case 'rec': {
+        if (!ui.sheet || ui.busy['rec' + el.dataset.tid]) return; var rk = 'rec' + el.dataset.tid; ui.busy[rk] = true; toast('Відкриваємо…');
+        try {
+          var imdb = await F.tmdbImdbId(el.dataset.mt, el.dataset.tid), cur = ui.sheet, recs = (F.getItem(cur.id) && F.getItem(cur.id).recs.length ? F.getItem(cur.id).recs : (cur.extras && cur.extras.data && cur.extras.data.recs) || []), rr = null;
+          for (var ri = 0; ri < recs.length; ri++) if (String(recs[ri].tid) === el.dataset.tid) rr = recs[ri];
+          ui.stack.push({ id: cur.id, brief: cur.brief || (cur.item ? F.brief(cur.item) : null) });
+          toastEl.classList.remove('show');
+          openSheet(imdb, rr ? { id: imdb, title: rr.title, year: rr.year, type: rr.mt === 'tv' ? 'series' : 'movie', poster: F.tmdbImg(rr.poster, 'w342') } : null);
+        } catch (e) { toast(F.describeError(e)); }
+        delete ui.busy[rk]; break;
+      }
       case 'toggle-orig': if (ui.sheet) { ui.sheet.showOrig = !ui.sheet.showOrig; renderSheet(); } break;
       case 'translate': {
         var sh2 = ui.sheet, it4 = sheetItem(); if (!sh2 || !it4 || sh2.translating) return;
@@ -285,7 +343,7 @@
       case 'refresh': {
         var sh = ui.sheet; if (!sh || sh.refreshing) return; sh.refreshing = true; sh.error = null; renderSheet();
         try { await F.refresh(sh.id); toast('Рейтинги оновлено'); } catch (e) { sh.error = e; }
-        sh.refreshing = false; if (ui.sheet === sh) { renderSheet(); render(); } break;
+        sh.refreshing = false; if (ui.sheet === sh) { renderSheet(); render(); loadExtras(true); } break;
       }
       case 'remove': {
         var gone = F.removeItem(ui.sheet.id); closeSheet();
@@ -299,6 +357,11 @@
       case 'testkey': {
         ui.keyMsg = { ok: true, text: 'Перевіряємо…' }; render();
         try { await F.testKey(); ui.keyMsg = { ok: true, text: 'Ключ працює.' }; } catch (e) { ui.keyMsg = { ok: false, text: F.describeError(e) }; }
+        render(); break;
+      }
+      case 'testtmdb': {
+        ui.tmdbMsg = { ok: true, text: 'Перевіряємо…' }; render();
+        try { await F.testTmdb(); ui.tmdbMsg = { ok: true, text: 'Ключ TMDB працює.' }; } catch (e) { ui.tmdbMsg = { ok: false, text: F.describeError(e) }; }
         render(); break;
       }
       case 'testgem': {
@@ -325,6 +388,7 @@
   function onSubmit(form) {
     var kind = form.dataset.form;
     if (kind === 'search') { ui.q = form.elements.q.value; doSearch(false); }
+    if (kind === 'tmdbkey') { F.setTmdbKey(form.elements.tmdbkey.value); ui.tmdbMsg = F.tmdbKeyOf() ? { ok: true, text: 'Ключ збережено. Натисніть «Перевірити ключ».' } : { ok: true, text: 'Ключ видалено.' }; render(); }
     if (kind === 'gemkey') { F.setGemKey(form.elements.gemkey.value); ui.gemMsg = F.gemKeyOf() ? { ok: true, text: 'Ключ збережено. Натисніть «Перевірити ключ».' } : { ok: true, text: 'Ключ видалено.' }; ui.error = null; render(); }
     if (kind === 'key') {
       F.setKey(form.elements.key.value); ui.keyMsg = F.keyOf() ? { ok: true, text: 'Ключ збережено. Натисніть «Перевірити ключ», щоб переконатись, що він працює.' } : { ok: false, text: 'Ключ порожній.' }; ui.error = null; render();
