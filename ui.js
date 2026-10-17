@@ -48,9 +48,11 @@
   function renderSearch() {
     var h = '<div class="page-h"><h1>Кіноман</h1></div>';
     if (!F.keyOf()) h += noKeyHtml();
-    h += '<form class="searchbar" data-form="search" role="search"><input type="search" id="q" name="q" placeholder="Назва або ID з IMDb" value="' + esc(ui.q) + '" autocomplete="off" autocapitalize="none" enterkeyhint="search" aria-label="Назва фільму чи серіалу"><button class="btn" type="submit" aria-label="Шукати">' + ic('search') + '</button></form>';
+    h += '<form class="searchbar" data-form="search" role="search"><input type="search" id="q" name="q" placeholder="' + (F.gemKeyOf() ? 'Назва українською чи англійською' : 'Назва англійською або ID з IMDb') + '" value="' + esc(ui.q) + '" autocomplete="off" autocapitalize="none" enterkeyhint="search" aria-label="Назва фільму чи серіалу"><button class="btn" type="submit" aria-label="Шукати">' + ic('search') + '</button></form>';
     h += '<div class="seg" role="group" aria-label="Тип">' + [['', 'Усе'], ['movie', 'Фільми'], ['series', 'Серіали']].map(function (t) { return '<button type="button" data-act="type" data-type="' + t[0] + '" aria-pressed="' + (ui.type === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
-    if (ui.error) h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(ui.error)) + '</div></div>';
+    if (ui.error) h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(ui.error)) + (ui.error.code === 'NEED_GEMINI' ? '<p style="margin:10px 0 0"><button class="btn sm" data-act="tab" data-tab="more">Додати ключ Gemini</button></p>' : '') + '</div></div>';
+    if (ui.results.length && ui.translatedAs) h += '<p class="sub" style="margin:0 0 6px">Шукали за оригінальною назвою: ' + esc(ui.translatedAs) + '</p>';
+    if (ui.results.length && ui.exact) h += '<p class="sub" style="margin:0 0 6px">Назва надто загальна, тому показано один найточніший збіг. Щоб уточнити, додайте рік, наприклад «Dark 2017».</p>';
     if (ui.results.length) {
       h += '<div>' + ui.results.map(rowHtml).join('') + '</div>';
       if (ui.results.length < ui.total) h += '<div class="more">' + (ui.loading ? '<div class="spin" role="status" aria-label="Завантаження"></div>' : '<button class="btn ghost block" data-act="more">Показати ще</button>') + '</div>';
@@ -61,14 +63,14 @@
   }
   async function doSearch(more) {
     var q = ui.q.trim(); if (!q) return;
-    var tok = ++ui.token; ui.loading = true; ui.error = null;
+    var tok = ++ui.token; ui.loading = true; ui.error = null; if (!more) { ui.exact = false; ui.translatedAs = ''; }
     if (!more) { ui.results = []; ui.total = 0; ui.page = 0; ui.searched = false; }
     render();
     try {
       var page = more ? ui.page + 1 : 1; var r = await F.search(q, ui.type, page);
       if (tok !== ui.token) return;
       var seen = {}; ui.results.forEach(function (x) { seen[x.id] = 1; });
-      ui.results = ui.results.concat(r.items.filter(function (x) { return !seen[x.id]; })); ui.total = r.total; ui.page = page; ui.searched = true;
+      ui.results = ui.results.concat(r.items.filter(function (x) { return !seen[x.id]; })); ui.total = r.total; ui.page = page; ui.searched = true; ui.exact = !!r.exact; ui.translatedAs = r.translatedAs || '';
     } catch (e) { if (tok !== ui.token) return; ui.error = e; ui.searched = true; }
     ui.loading = false; render();
   }
@@ -79,7 +81,7 @@
     if (it.ratings.imdb != null) b += '<span>' + it.ratings.imdb.toFixed(1) + '</span>';
     if (it.myRating) b += '<span class="me" title="Моя оцінка">' + it.myRating + '</span>';
     else if (it.type === 'series' && F.watchedCount(it)) b += '<span class="done">' + F.watchedCount(it) + ' еп.</span>';
-    return '<button class="card" data-act="open" data-id="' + it.id + '">' + '<span class="poster"><span class="ph">' + esc(it.title) + '</span>' + (it.poster ? '<img src="' + esc(it.poster) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '') + '<span class="badge">' + b + '</span></span><span class="name">' + esc(it.title) + '</span><span class="yr">' + esc(it.year) + '</span></button>';
+    return '<button class="card" data-act="open" data-id="' + it.id + '">' + '<span class="poster"><span class="ph">' + esc(it.title) + '</span>' + (it.poster ? '<img src="' + esc(it.poster) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '') + '<span class="badge">' + b + '</span></span><span class="name">' + esc(it.titleUk || it.title) + '</span><span class="yr">' + esc(it.year) + '</span></button>';
   }
   function renderList(status) {
     var f = ui.lists[status], all = F.list(status), items = F.list(status, f);
@@ -91,7 +93,7 @@
     h += '<div class="seg" role="group" aria-label="Тип">' + [['', 'Усе'], ['movie', 'Фільми'], ['series', 'Серіали']].map(function (t) { return '<button type="button" data-act="ltype" data-type="' + t[0] + '" aria-pressed="' + (f.type === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
     h += '<div class="tools"><select data-change="sort" aria-label="Сортування">' + Object.keys(F.SORTS).map(function (k) { return '<option value="' + k + '"' + (f.sort === k ? ' selected' : '') + '>' + esc(F.SORTS[k]) + '</option>'; }).join('') + '</select></div>';
     var gs = F.genres(status);
-    if (gs.length > 1) h += '<div class="chips" role="group" aria-label="Жанри"><button class="chip' + (!f.genre ? ' on' : '') + '" data-act="genre" data-genre="">Усі жанри</button>' + gs.slice(0, 14).map(function (g) { return '<button class="chip' + (f.genre === g.name ? ' on' : '') + '" data-act="genre" data-genre="' + esc(g.name) + '">' + esc(g.name) + ' ' + g.count + '</button>'; }).join('') + '</div>';
+    if (gs.length > 1) h += '<div class="chips" role="group" aria-label="Жанри"><button class="chip' + (!f.genre ? ' on' : '') + '" data-act="genre" data-genre="">Усі жанри</button>' + gs.slice(0, 14).map(function (g) { return '<button class="chip' + (f.genre === g.name ? ' on' : '') + '" data-act="genre" data-genre="' + esc(g.name) + '">' + esc(F.genreUk(g.name)) + ' ' + g.count + '</button>'; }).join('') + '</div>';
     if (!items.length) return h + emptyHtml('film', 'За цим фільтром порожньо', 'Змініть тип чи жанр.');
     return h + '<div class="grid">' + items.map(cardHtml).join('') + '</div>';
   }
@@ -105,7 +107,12 @@
     h += '<p style="margin:10px 0 0"><button class="btn ghost sm" data-act="testkey"' + (hasKey ? '' : ' disabled') + '>Перевірити ключ</button></p>';
     if (ui.keyMsg) h += '<p class="' + (ui.keyMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.keyMsg.text) + '</p>';
     h += '<p class="fine">Ключ зберігається лише в цьому телефоні й не потрапляє в копію даних. OMDb приймає ключ лише в адресі запиту, тому нікому його не показуйте й не публікуйте.</p></section>';
-    h += '<section class="panel"><h2>Ваша статистика</h2><div class="stats"><div class="stat"><div class="v">' + s.seen + '</div><div class="n">переглянуто</div></div><div class="stat"><div class="v">' + s.want + '</div><div class="n">у списку «Хочу»</div></div><div class="stat"><div class="v">' + (s.avgMine == null ? '—' : s.avgMine.toFixed(1)) + '</div><div class="n">середня оцінка</div></div><div class="stat"><div class="v">' + (s.minutes ? esc(F.fmtMinutes(s.minutes)) : '—') + '</div><div class="n">часу за екраном</div></div></div>' + (s.topGenres.length ? '<p class="sub">Найчастіше: ' + s.topGenres.map(function (g) { return esc(g.name); }).join(', ') + '</p>' : '') + '</section>';
+    h += '<section class="panel"><h2>Gemini (необов’язково)</h2><p class="sub" style="margin:0 0 10px">З ключем Gemini можна шукати фільми українською та перекладати сюжет. Без нього все працює, але назви треба вводити англійською.</p>';
+    h += '<form class="keyrow" data-form="gemkey"><input type="text" id="gemkey" name="gemkey" value="' + esc(F.gemKeyOf()) + '" placeholder="Ключ Gemini" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Ключ Gemini"><button class="btn" type="submit">Зберегти</button></form>';
+    h += '<p style="margin:10px 0 0;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost sm" data-act="testgem"' + (F.gemKeyOf() ? '' : ' disabled') + '>Перевірити ключ</button>' + (!F.gemKeyOf() && F.foreignGemKey() ? '<button class="btn soft sm" data-act="usenutri">Взяти ключ із NutriPlan</button>' : '') + '</p>';
+    if (ui.gemMsg) h += '<p class="' + (ui.gemMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.gemMsg.text) + '</p>';
+    h += '<p class="fine">Ключ зберігається лише в цьому телефоні й не потрапляє в копію даних. До Google надсилається тільки назва, яку ви шукаєте, та опис фільму для перекладу. Це безкоштовно в межах ліміту Google.</p></section>';
+    h += '<section class="panel"><h2>Ваша статистика</h2><div class="stats"><div class="stat"><div class="v">' + s.seen + '</div><div class="n">переглянуто</div></div><div class="stat"><div class="v">' + s.want + '</div><div class="n">у списку «Хочу»</div></div><div class="stat"><div class="v">' + (s.avgMine == null ? '—' : s.avgMine.toFixed(1)) + '</div><div class="n">середня оцінка</div></div><div class="stat"><div class="v">' + (s.minutes ? esc(F.fmtMinutes(s.minutes)) : '—') + '</div><div class="n">часу за екраном</div></div></div>' + (s.topGenres.length ? '<p class="sub">Найчастіше: ' + s.topGenres.map(function (g) { return esc(F.genreUk(g.name)); }).join(', ') + '</p>' : '') + '</section>';
     h += '<section class="panel"><h2>Копія даних</h2><p class="sub" style="margin:0 0 10px">Списки, оцінки й нотатки лежать тільки в цьому телефоні. Збережіть копію, щоб перенести їх на інший пристрій чи не втратити при очищенні браузера.</p><div class="actions" style="margin-top:0"><button class="btn ghost" data-act="export">' + ic('download', 'sm') + 'Зберегти копію</button><button class="btn ghost" data-act="import">' + ic('upload', 'sm') + 'Відновити</button></div><input type="file" id="import-file" accept="application/json,.json" class="hide">';
     if (ui.backupMsg) h += '<p class="' + (ui.backupMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.backupMsg.text) + '</p>';
     if (F.isSaveFailed()) h += '<p class="er-t">Телефон не дає зберегти дані. Звільніть місце або вимкніть приватний режим.</p>';
@@ -141,6 +148,10 @@
     });
     return h;
   }
+  function sheetTr(sh, lib, it) {
+    if (lib && (lib.plotUk || lib.titleUk)) return { titleUk: lib.titleUk, plotUk: lib.plotUk };
+    return sh.tr || { titleUk: '', plotUk: '' };
+  }
   function sheetHtml() {
     var sh = ui.sheet, lib = F.getItem(sh.id), it = lib || sh.item;
     var hdr = '<button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button>';
@@ -149,20 +160,26 @@
       return hdr + '<div class="hero"><div class="in">' + posterHtml(b && b.poster, b ? b.title : '') + '<div class="info"><h3>' + esc(b ? b.title : '') + '</h3><div class="meta">' + (b ? esc(typeLabel(b.type)) + (b.year ? ', ' + esc(b.year) : '') : '') + '</div></div></div></div><div class="body">' +
         (sh.error ? '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(sh.error)) + '<p style="margin:10px 0 0"><button class="btn sm" data-act="retry">Спробувати ще раз</button></p></div></div>' : '<div class="spin" role="status" aria-label="Завантаження"></div>') + '</div>';
     }
-    var r = it.ratings;
-    var h = hdr + '<div class="hero"><div class="bg" style="' + (it.poster ? 'background-image:url(\'' + esc(it.poster) + '\')' : '') + '"></div><div class="in">' + posterHtml(it.poster, it.title) + '<div class="info"><h3>' + esc(it.title) + '</h3><div class="meta">' + esc(typeLabel(it.type)) + (it.year ? ', ' + esc(it.year) : '') + (it.runtime ? '<br>' + esc(F.fmtMinutes(it.runtime)) + (it.type === 'series' ? ' за серію' : '') : '') + (it.rated ? '<br>' + esc(it.rated) : '') + '</div></div></div></div><div class="body">';
+    var r = it.ratings, tr = sheetTr(sh, lib, it);
+    var h = hdr + '<div class="hero"><div class="bg" style="' + (it.poster ? 'background-image:url(\'' + esc(it.poster) + '\')' : '') + '"></div><div class="in">' + posterHtml(it.poster, it.title) + '<div class="info"><h3>' + esc(tr.titleUk || it.title) + '</h3><div class="meta">' + (tr.titleUk && tr.titleUk !== it.title ? esc(it.title) + '<br>' : '') + esc(typeLabel(it.type)) + (it.year ? ', ' + esc(it.year) : '') + (it.runtime ? '<br>' + esc(F.fmtMinutes(it.runtime)) + (it.type === 'series' ? ' за серію' : '') : '') + (it.rated ? '<br>' + esc(it.rated) : '') + '</div></div></div></div><div class="body">';
     h += '<div class="scores"><div class="score imdb"><div class="v">' + (r.imdb != null ? r.imdb.toFixed(1) + '<small>/10</small>' : '—') + '</div><div class="n">IMDb' + (r.votes ? ', ' + esc(r.votes) : '') + '</div></div>' +
       '<div class="score ' + scoreClass('rt', r.rt) + '"><div class="v">' + (r.rt != null ? r.rt + '<small>%</small>' : '—') + '</div><div class="n">Rotten Tomatoes</div></div>' +
       '<div class="score ' + scoreClass('meta', r.meta) + '"><div class="v">' + (r.meta != null ? r.meta + '<small>/100</small>' : '—') + '</div><div class="n">Metacritic</div></div></div>';
-    if (it.genre.length) h += '<div class="tags">' + it.genre.map(function (g) { return '<span class="tag">' + esc(g) + '</span>'; }).join('') + '</div>';
+    if (it.genre.length) h += '<div class="tags">' + it.genre.map(function (g) { return '<span class="tag">' + esc(F.genreUk(g)) + '</span>'; }).join('') + '</div>';
     h += '<div class="status"><button class="btn ghost' + (lib && lib.status === 'want' ? ' on' : '') + '" data-act="status" data-st="want" aria-pressed="' + !!(lib && lib.status === 'want') + '">' + ic('bookmark', 'sm') + 'Хочу</button><button class="btn ghost' + (lib && lib.status === 'seen' ? ' on' : '') + '" data-act="status" data-st="seen" aria-pressed="' + !!(lib && lib.status === 'seen') + '">' + ic('eye', 'sm') + 'Переглянуто</button></div>';
     if (lib && lib.status === 'seen' && lib.seenAt) h += '<p class="sub" style="margin:6px 0 0">Переглянуто ' + esc(new Date(lib.seenAt).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })) + '</p>';
     h += '<h2>Моя оцінка' + (lib && lib.myRating ? ': ' + lib.myRating + ' з 10' : '') + '</h2><div class="scale" role="group" aria-label="Моя оцінка">';
     for (var i = 1; i <= 10; i++) h += '<button type="button" data-act="rate" data-n="' + i + '" class="' + (lib && lib.myRating === i ? 'on' : lib && lib.myRating && i < lib.myRating ? 'fill' : '') + '" aria-pressed="' + !!(lib && lib.myRating === i) + '">' + i + '</button>';
     h += '</div>';
     if (lib) h += '<label class="fl" for="note">Нотатка</label><textarea id="note" data-input="note" maxlength="1000" placeholder="З ким дивились, що сподобалось, кому порадити">' + esc(lib.note) + '</textarea>';
-    if (it.plot) h += '<h2>Сюжет</h2><p class="plot">' + esc(it.plot) + '</p>';
-    var dl = dlRow('Режисер', it.director) + dlRow('Сценарій', it.writer) + dlRow('У ролях', it.actors) + dlRow('Вихід', it.released) + dlRow('Країна', it.country) + dlRow('Мова', it.language) + dlRow('Нагороди', it.awards);
+    if (it.plot) {
+      var showUk = tr.plotUk && !sh.showOrig;
+      h += '<h2>Сюжет</h2><p class="plot">' + esc(showUk ? tr.plotUk : it.plot) + '</p>';
+      if (tr.plotUk) h += '<p style="margin:0"><button class="btn ghost sm" data-act="toggle-orig">' + (showUk ? 'Показати оригінал' : 'Показати переклад') + '</button></p>';
+      else if (sh.translating) h += '<div class="spin" role="status" aria-label="Перекладаємо"></div>';
+      else h += '<p style="margin:0"><button class="btn ghost sm" data-act="translate">' + ic('sparkle', 'sm') + 'Перекласти українською</button></p>' + (sh.trError ? '<p class="er-t" role="status" style="margin:8px 0 0">' + esc(sh.trError) + '</p>' : '');
+    }
+    var dl = dlRow('Режисер', it.director) + dlRow('Сценарій', it.writer) + dlRow('У ролях', it.actors) + dlRow('Вихід', F.dateUk(it.released)) + dlRow('Країна', F.countryUk(it.country)) + dlRow('Мова', F.langUk(it.language)) + dlRow('Нагороди', it.awards);
     if (dl) h += '<dl class="dl">' + dl + '</dl>';
     h += seasonBlock(sh, it, lib);
     h += '<div class="actions"><a class="btn ghost sm" href="https://www.imdb.com/title/' + esc(it.id) + '/" target="_blank" rel="noopener">' + ic('link', 'sm') + 'Відкрити в IMDb</a>';
@@ -211,7 +228,7 @@
     tabsEl.innerHTML = TABS.map(function (t) { return '<button data-act="tab" data-tab="' + t[0] + '"' + (st === t[0] ? ' aria-current="page"' : '') + '>' + ic(t[2]) + '<span>' + t[1] + '</span>' + (t[0] === 'want' && wc ? '<span class="cnt">' + wc + '</span>' : '') + '</button>'; }).join('');
     if (ui.sheet) renderSheet();
   }
-  function setTab(t) { ui.tab = t; ui.keyMsg = null; ui.backupMsg = null; render(); window.scrollTo(0, 0); }
+  function setTab(t) { ui.tab = t; ui.keyMsg = null; ui.backupMsg = null; ui.gemMsg = null; render(); window.scrollTo(0, 0); }
 
   // ---------- Події ----------
   async function onAct(el) {
@@ -243,6 +260,17 @@
         else if (F.getItem(it1.id).status === 'want' && F.getItem(it1.id).myRating == null) F.setStatus(F.getItem(it1.id), 'seen');
         F.setMyRating(it1.id, Number(el.dataset.n)); break;
       }
+      case 'toggle-orig': if (ui.sheet) { ui.sheet.showOrig = !ui.sheet.showOrig; renderSheet(); } break;
+      case 'translate': {
+        var sh2 = ui.sheet, it4 = sheetItem(); if (!sh2 || !it4 || sh2.translating) return;
+        sh2.translating = true; sh2.trError = ''; sh2.showOrig = false; renderSheet();
+        try {
+          var t4 = await F.translateItem(it4);
+          if (F.getItem(it4.id)) F.setTranslation(it4.id, t4); else sh2.tr = t4;
+          if (!t4.plotUk) sh2.trError = 'Gemini не повернув переклад. Спробуйте ще раз.';
+        } catch (e) { sh2.trError = F.describeError(e); }
+        sh2.translating = false; if (ui.sheet === sh2) { renderSheet(); render(); } break;
+      }
       case 'season': loadSeasonNow(Number(el.dataset.n)); break;
       case 'ep': {
         var it2 = sheetItem(); if (!it2) return;
@@ -273,6 +301,12 @@
         try { await F.testKey(); ui.keyMsg = { ok: true, text: 'Ключ працює.' }; } catch (e) { ui.keyMsg = { ok: false, text: F.describeError(e) }; }
         render(); break;
       }
+      case 'testgem': {
+        ui.gemMsg = { ok: true, text: 'Перевіряємо…' }; render();
+        try { await F.testGemini(); ui.gemMsg = { ok: true, text: 'Ключ Gemini працює.' }; } catch (e) { ui.gemMsg = { ok: false, text: F.describeError(e) || 'Не вдалося перевірити ключ.' }; }
+        render(); break;
+      }
+      case 'usenutri': ui.gemMsg = F.useForeignGemKey() ? { ok: true, text: 'Ключ взято. Натисніть «Перевірити ключ».' } : { ok: false, text: 'Ключ NutriPlan не знайдено.' }; render(); break;
       case 'export': doExport(); break;
       case 'import': { var fi = $('#import-file'); if (fi) fi.click(); break; }
       case 'toast-act': { var fn = toastEl._fn; toastEl.classList.remove('show'); toastEl._fn = null; if (fn) fn(); break; }
@@ -291,6 +325,7 @@
   function onSubmit(form) {
     var kind = form.dataset.form;
     if (kind === 'search') { ui.q = form.elements.q.value; doSearch(false); }
+    if (kind === 'gemkey') { F.setGemKey(form.elements.gemkey.value); ui.gemMsg = F.gemKeyOf() ? { ok: true, text: 'Ключ збережено. Натисніть «Перевірити ключ».' } : { ok: true, text: 'Ключ видалено.' }; ui.error = null; render(); }
     if (kind === 'key') {
       F.setKey(form.elements.key.value); ui.keyMsg = F.keyOf() ? { ok: true, text: 'Ключ збережено. Натисніть «Перевірити ключ», щоб переконатись, що він працює.' } : { ok: false, text: 'Ключ порожній.' }; ui.error = null; render();
     }

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v1';
+  var VERSION = 'v3';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -23,7 +23,7 @@
   function on(f) { listeners.push(f); }
 
   // ---------- Стан ----------
-  function freshState() { return { v: 1, key: '', items: {}, meta: { created: FB.now(), lastBackup: 0 } }; }
+  function freshState() { return { v: 1, key: '', gemKey: '', tr: {}, items: {}, meta: { created: FB.now(), lastBackup: 0 } }; }
   function normalizeItem(x) {
     if (!x || !isId(x.id)) return null;
     var r = x.ratings || {};
@@ -41,6 +41,7 @@
       plot: String(x.plot || '').slice(0, 2000), language: String(x.language || '').slice(0, 100), country: String(x.country || '').slice(0, 100), awards: String(x.awards || '').slice(0, 300),
       ratings: { imdb: r.imdb == null ? null : num(r.imdb), votes: String(r.votes || '').slice(0, 20), rt: r.rt == null ? null : num(r.rt), meta: r.meta == null ? null : num(r.meta) },
       totalSeasons: Math.max(0, Math.min(100, Number(x.totalSeasons) || 0)),
+      titleUk: String(x.titleUk || '').slice(0, 200), plotUk: String(x.plotUk || '').slice(0, 2500),
       status: x.status === 'seen' ? 'seen' : 'want', myRating: my, note: String(x.note || '').slice(0, 1000),
       addedAt: Number(x.addedAt) || 0, seenAt: Number(x.seenAt) || 0, updatedAt: Number(x.updatedAt) || 0, fetchedAt: Number(x.fetchedAt) || 0,
       seasons: seasons, watched: watched
@@ -49,6 +50,8 @@
   function normalizeState(o) {
     var s = freshState(); if (!o || typeof o !== 'object') return s;
     s.key = typeof o.key === 'string' ? o.key.trim().slice(0, 64) : '';
+    s.gemKey = typeof o.gemKey === 'string' ? o.gemKey.trim().slice(0, 200) : '';
+    if (o.tr && typeof o.tr === 'object') Object.keys(o.tr).slice(0, 200).forEach(function (k) { var v = o.tr[k]; if (v && Array.isArray(v.titles)) s.tr[String(k).slice(0, 100)] = { titles: v.titles.map(function (x) { return String(x).slice(0, 120); }).filter(Boolean).slice(0, 3), year: /^\d{4}$/.test(String(v.year)) ? String(v.year) : '' }; });
     if (o.items && typeof o.items === 'object') Object.keys(o.items).slice(0, 5000).forEach(function (k) { var it = normalizeItem(o.items[k]); if (it) s.items[it.id] = it; });
     if (o.meta && typeof o.meta === 'object') { s.meta.created = Number(o.meta.created) || s.meta.created; s.meta.lastBackup = Number(o.meta.lastBackup) || 0; }
     return s;
@@ -62,6 +65,100 @@
     if (!silent) emit();
   }
   function init() { if (!S) load(); FB.state = S; }
+
+
+  // ---------- Gemini (необов'язково): переклад пошуку й опису ----------
+  var GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
+  FB.geminiDelays = [1000, 2000, 4000];
+  FB.sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  function gemKeyOf() { return (S.gemKey || '').trim(); }
+  function setGemKey(k) { S.gemKey = String(k || '').trim().slice(0, 200); save(); }
+  function foreignGemKey() { try { return (localStorage.getItem('nutriplan_user_gemini_key') || '').trim(); } catch (e) { return ''; } }
+  function useForeignGemKey() { var k = foreignGemKey(); if (!k) return false; setGemKey(k); return true; }
+  async function gemErrorDetail(res) {
+    var raw = ''; try { raw = await res.text(); } catch (e) { return ''; }
+    raw = String(raw || '').trim(); if (!raw) return '';
+    try { var o = JSON.parse(raw); var em = o && o.error; var m = em && (em.message || em.status); if (m) return String(m).slice(0, 300); } catch (e2) { /* не JSON */ }
+    return raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+  }
+  async function gemini(payload) {
+    var key = gemKeyOf(); if (!key) throw err('NEED_GEMINI');
+    var used = 0, lastErr = null, softErr = null;
+    for (var mi = 0; mi < GEMINI_MODELS.length; mi++) {
+      var model = GEMINI_MODELS[mi];
+      for (;;) {
+        var res;
+        try {
+          // ключ іде лише в заголовку, ніколи в адресі
+          res = await FB.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(payload) });
+        } catch (ne) {
+          lastErr = softErr = err('GEM_NETWORK');
+          if (used >= FB.geminiDelays.length) break;
+          await FB.sleep(FB.geminiDelays[used++]); continue;
+        }
+        if (res.ok) return await res.json();
+        lastErr = err('GEM_HTTP'); lastErr.status = res.status; lastErr.model = model; lastErr.detail = await gemErrorDetail(res);
+        if (res.status === 404) break;
+        if (res.status === 429 || res.status >= 500) { softErr = lastErr; if (used >= FB.geminiDelays.length) break; await FB.sleep(FB.geminiDelays[used++]); continue; }
+        throw lastErr;
+      }
+    }
+    if (lastErr && lastErr.status === 404 && softErr) throw softErr;
+    throw lastErr || err('GEM_HTTP');
+  }
+  async function geminiJson(prompt, schema) {
+    var data = await gemini({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: schema } });
+    var parts = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
+    var text = (parts || []).map(function (p) { return p.text || ''; }).join('');
+    try { return JSON.parse(text.replace(/^```(?:json)?|```$/g, '').trim()); } catch (e) { throw err('GEM_BAD'); }
+  }
+  function describeGemError(e) {
+    var c = e && e.code, st = e && e.status;
+    if (c === 'NEED_GEMINI') return 'Щоб шукати українською, додайте ключ Gemini у розділі «Ще». Без нього шукайте назву англійською.';
+    if (c === 'GEM_NETWORK') return 'Немає зв’язку з Gemini. Перевірте інтернет і спробуйте ще раз.';
+    if (c === 'GEM_BAD') return 'Gemini відповів незрозуміло. Спробуйте ще раз.';
+    if (st === 400 || st === 401 || st === 403) {
+      var d = String((e && e.detail) || ''), low = d.toLowerCase();
+      if (/leak/.test(low)) return 'Google вимкнув цей ключ Gemini, бо він був у відкритому доступі. Створіть новий на aistudio.google.com/apikey.';
+      if (/not valid|invalid/.test(low)) return 'Google вважає ключ Gemini недійсним. Скопіюйте його ще раз повністю.';
+      if (/referer|referrer/.test(low)) return 'Ключ Gemini обмежено за сайтом. У Google AI Studio зніміть це обмеження.';
+      return 'Gemini відхилив запит (код ' + st + ')' + (d ? ': «' + d.slice(0, 140) + '»' : '') + '.';
+    }
+    if (st === 404) return 'Жодна з моделей Gemini недоступна для цього ключа.';
+    if (st === 429) return 'Перевищено ліміт запитів Gemini. Зачекайте хвилину й спробуйте ще раз.';
+    if (st >= 500) return 'Моделі Gemini зараз перевантажені (код ' + st + '). Спробуйте ще раз за кілька хвилин.';
+    return null;
+  }
+  function hasCyrillic(s) { return /[Ѐ-ӿ]/.test(String(s)); }
+  async function translateQuery(q) {
+    var k = q.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (S.tr[k]) return S.tr[k];
+    var o = await geminiJson('Користувач шукає фільм або серіал за назвою, яку написав українською, російською чи латиницею з помилками: «' + q.replace(/[«»"]/g, '') + '». Поверни JSON з полями titles (від одного до трьох варіантів оригінальної назви так, як вона записана на IMDb, найімовірніший першим; для іноземних стрічок міжнародна англійська назва) та year (рік першого виходу, якщо ти певен, інакше порожній рядок). Нічого не вигадуй: якщо не впізнаєш, дай найближчі за звучанням варіанти.',
+      { type: 'OBJECT', properties: { titles: { type: 'ARRAY', items: { type: 'STRING' } }, year: { type: 'STRING' } }, required: ['titles'] });
+    var titles = (Array.isArray(o.titles) ? o.titles : []).map(function (x) { return String(x).trim(); }).filter(Boolean).slice(0, 3);
+    if (!titles.length) throw err('NOT_FOUND');
+    var rec = { titles: titles, year: /^\d{4}$/.test(String(o.year || '')) ? String(o.year) : '' };
+    var keys = Object.keys(S.tr); if (keys.length >= 150) delete S.tr[keys[0]];
+    S.tr[k] = rec; save(true); return rec;
+  }
+  async function translateItem(it) {
+    var o = await geminiJson('Ти перекладач для додатка про кіно. Фільм або серіал: «' + it.title + '» (' + it.year + '). Сюжет англійською: ' + (it.plot || '(немає)') + '\nПоверни JSON: title_uk (загальновживана українська назва в Україні, лише якщо ти її достеменно знаєш, інакше порожній рядок; нічого не вигадуй) і plot_uk (природний переклад сюжету українською, без нових подробиць; порожній рядок, якщо сюжету немає).',
+      { type: 'OBJECT', properties: { title_uk: { type: 'STRING' }, plot_uk: { type: 'STRING' } }, required: ['title_uk', 'plot_uk'] });
+    return { titleUk: String(o.title_uk || '').trim().slice(0, 200), plotUk: String(o.plot_uk || '').trim().slice(0, 2500) };
+  }
+  function setTranslation(id, t) { var it = S.items[id]; if (!it) return; it.titleUk = t.titleUk || ''; it.plotUk = t.plotUk || ''; it.updatedAt = stamp(it.updatedAt); save(true); }
+  async function testGemini() { var o = await geminiJson('Поверни JSON {"ok":"так"}', { type: 'OBJECT', properties: { ok: { type: 'STRING' } }, required: ['ok'] }); return !!o; }
+
+  // ---------- Українські підписи без ШІ ----------
+  var GENRES = { 'Action': 'Бойовик', 'Adventure': 'Пригоди', 'Animation': 'Анімація', 'Biography': 'Біографія', 'Comedy': 'Комедія', 'Crime': 'Кримінал', 'Documentary': 'Документальний', 'Drama': 'Драма', 'Family': 'Сімейний', 'Fantasy': 'Фентезі', 'Film-Noir': 'Нуар', 'History': 'Історичний', 'Horror': 'Жахи', 'Music': 'Музика', 'Musical': 'Мюзикл', 'Mystery': 'Детектив', 'Romance': 'Мелодрама', 'Sci-Fi': 'Фантастика', 'Short': 'Короткометражка', 'Sport': 'Спорт', 'Thriller': 'Трилер', 'War': 'Військовий', 'Western': 'Вестерн', 'Reality-TV': 'Реаліті', 'Talk-Show': 'Ток-шоу', 'News': 'Новини', 'Game-Show': 'Ігрове шоу' };
+  var COUNTRIES = { 'United States': 'США', 'USA': 'США', 'United Kingdom': 'Велика Британія', 'UK': 'Велика Британія', 'France': 'Франція', 'Germany': 'Німеччина', 'West Germany': 'ФРН', 'Italy': 'Італія', 'Spain': 'Іспанія', 'Canada': 'Канада', 'Australia': 'Австралія', 'Japan': 'Японія', 'South Korea': 'Південна Корея', 'China': 'Китай', 'Hong Kong': 'Гонконг', 'India': 'Індія', 'Ukraine': 'Україна', 'Poland': 'Польща', 'Sweden': 'Швеція', 'Denmark': 'Данія', 'Norway': 'Норвегія', 'Finland': 'Фінляндія', 'Ireland': 'Ірландія', 'Mexico': 'Мексика', 'Brazil': 'Бразилія', 'Argentina': 'Аргентина', 'Russia': 'Росія', 'Soviet Union': 'СРСР', 'New Zealand': 'Нова Зеландія', 'Czech Republic': 'Чехія', 'Czechoslovakia': 'Чехословаччина', 'Netherlands': 'Нідерланди', 'Belgium': 'Бельгія', 'Austria': 'Австрія', 'Switzerland': 'Швейцарія', 'Turkey': 'Туреччина', 'Hungary': 'Угорщина', 'Iceland': 'Ісландія', 'Greece': 'Греція', 'Israel': 'Ізраїль', 'Thailand': 'Таїланд', 'South Africa': 'ПАР', 'Taiwan': 'Тайвань', 'Romania': 'Румунія', 'Georgia': 'Грузія' };
+  var LANGS = { 'English': 'англійська', 'French': 'французька', 'German': 'німецька', 'Spanish': 'іспанська', 'Italian': 'італійська', 'Japanese': 'японська', 'Korean': 'корейська', 'Mandarin': 'мандаринська', 'Cantonese': 'кантонська', 'Russian': 'російська', 'Ukrainian': 'українська', 'Hindi': 'гінді', 'Portuguese': 'португальська', 'Swedish': 'шведська', 'Danish': 'данська', 'Norwegian': 'норвезька', 'Finnish': 'фінська', 'Polish': 'польська', 'Latin': 'латинська', 'Arabic': 'арабська', 'Turkish': 'турецька', 'Dutch': 'нідерландська', 'Czech': 'чеська', 'Hungarian': 'угорська', 'Greek': 'грецька', 'Hebrew': 'іврит', 'Thai': 'тайська', 'Icelandic': 'ісландська', 'None': 'без діалогів' };
+  var MONTHS = { Jan: 'січня', Feb: 'лютого', Mar: 'березня', Apr: 'квітня', May: 'травня', Jun: 'червня', Jul: 'липня', Aug: 'серпня', Sep: 'вересня', Oct: 'жовтня', Nov: 'листопада', Dec: 'грудня' };
+  function genreUk(g) { return GENRES[g] || g; }
+  function mapList(str, map) { return String(str || '').split(',').map(function (x) { x = x.trim(); return map[x] || x; }).filter(Boolean).join(', '); }
+  function countryUk(s) { return mapList(s, COUNTRIES); }
+  function langUk(s) { return mapList(s, LANGS); }
+  function dateUk(s) { var m = /^(\d{1,2}) ([A-Z][a-z]{2}) (\d{4})$/.exec(String(s || '').trim()); return m && MONTHS[m[2]] ? m[1] + ' ' + MONTHS[m[2]] + ' ' + m[3] : String(s || ''); }
 
   // ---------- OMDb ----------
   function keyOf() { return (S.key || '').trim(); }
@@ -103,11 +200,12 @@
   }
   function describeError(e) {
     var c = e && e.code;
+    var g = describeGemError(e); if (g) return g;
     if (c === 'NO_KEY') return 'Спершу додайте ключ OMDb у розділі «Ще».';
     if (c === 'INVALID_KEY') return 'OMDb не прийняв ключ. Перевірте, чи ви скопіювали його повністю і чи підтвердили його листом на пошті.';
     if (c === 'LIMIT') return 'На сьогодні ліміт безкоштовних запитів OMDb вичерпано. Спробуйте завтра. Те, що вже у ваших списках, відкривається без запитів.';
     if (c === 'NETWORK') return 'Немає зв’язку з OMDb. Перевірте інтернет і спробуйте ще раз.';
-    if (c === 'TOO_MANY') return 'Забагато збігів. Додайте більше слів у назву.';
+    if (c === 'TOO_MANY') return 'Забагато збігів. Додайте рік після назви (наприклад, «Dark 2017») або оберіть вище «Фільми» чи «Серіали».';
     if (c === 'NOT_FOUND') return 'Нічого не знайдено. Спробуйте назву англійською або ID з IMDb (наприклад, tt0133093).';
     return 'OMDb повернув помилку' + (e && e.detail ? ': ' + String(e.detail).slice(0, 120) : '') + '.';
   }
@@ -126,15 +224,45 @@
       status: 'want', addedAt: 0, seenAt: 0, updatedAt: 0, fetchedAt: FB.now()
     });
   }
-  async function search(q, type, page) {
-    q = String(q || '').trim(); if (!q) return { items: [], total: 0 };
-    if (isId(q)) { var one = await details(q); return { items: [brief(one)], total: 1 }; }
-    var p = { s: q, page: page || 1 }; if (type === 'movie' || type === 'series') p.type = type;
+  async function trySearch(q, type, page, year) {
+    var p = { s: q, page: page || 1 }; if (type === 'movie' || type === 'series') p.type = type; if (year) p.y = year;
     try {
       var d = await api(p);
       var items = (Array.isArray(d.Search) ? d.Search : []).map(function (x) { return { id: clean(x.imdbID), title: clean(x.Title), year: clean(x.Year), type: typeOf(x.Type), poster: validPoster(x.Poster) }; }).filter(function (x) { return isId(x.id); });
       return { items: items, total: parseInt(d.totalResults, 10) || items.length };
-    } catch (e) { if (e.code === 'NOT_FOUND') return { items: [], total: 0 }; throw e; }
+    } catch (e) {
+      if (e.code === 'NOT_FOUND') return { items: [], total: 0 };
+      if (e.code === 'TOO_MANY' && (page || 1) === 1) {
+        // Назва надто загальна: просимо в OMDb найточніший збіг за назвою
+        var t = { t: q }; if (type === 'movie' || type === 'series') t.type = type; if (year) t.y = year;
+        try { var one = toItem(await api(t)); if (one) return { items: [brief(one)], total: 1, exact: true }; } catch (e2) { /* лишаємо початкову помилку */ }
+      }
+      throw e;
+    }
+  }
+  async function search(q, type, page) {
+    q = String(q || '').trim(); if (!q) return { items: [], total: 0 };
+    if (isId(q)) { var one = await details(q); return { items: [brief(one)], total: 1 }; }
+    if (hasCyrillic(q)) {
+      // Назва українською: Gemini підказує оригінальну назву, а далі звичайний пошук OMDb
+      if (page && page > 1) return { items: [], total: 0 };
+      if (!gemKeyOf()) throw err('NEED_GEMINI');
+      var tr = await translateQuery(q), items = [], seen = {}, firstErr = null;
+      for (var i = 0; i < tr.titles.length; i++) {
+        try {
+          var r = await trySearch(tr.titles[i], type, 1, i === 0 ? tr.year : '');
+          if (!r.items.length && i === 0 && tr.year) r = await trySearch(tr.titles[i], type, 1, '');
+          r.items.forEach(function (x) { if (!seen[x.id]) { seen[x.id] = 1; items.push(x); } });
+        } catch (e) { if (e.code === 'INVALID_KEY' || e.code === 'LIMIT' || e.code === 'NETWORK' || e.code === 'NO_KEY') throw e; firstErr = firstErr || e; }
+        if (items.length >= 8) break;
+      }
+      if (!items.length && firstErr && firstErr.code !== 'NOT_FOUND' && firstErr.code !== 'TOO_MANY') throw firstErr;
+      return { items: items, total: items.length, translatedAs: tr.titles[0] };
+    }
+    // Рік наприкінці назви («Dark 2017») уточнює пошук; якщо з роком нічого немає, шукаємо як є («Blade Runner 2049»)
+    var m = /^(.*\S)\s+((?:19|20)\d{2})$/.exec(q);
+    if (m) { var r0 = await trySearch(m[1], type, page, m[2]); if (r0.total) return r0; }
+    return trySearch(q, type, page, '');
   }
   function brief(it) { return { id: it.id, title: it.title, year: it.year, type: it.type, poster: it.poster }; }
   async function details(id) {
@@ -253,7 +381,7 @@
 
   Object.assign(FB, {
     VERSION: VERSION, init: init, on: on, save: save, isSaveFailed: function () { return saveFailed; },
-    keyOf: keyOf, setKey: setKey, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
+    keyOf: keyOf, setKey: setKey, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
     getItem: getItem, setStatus: setStatus, setMyRating: setMyRating, setNote: setNote, removeItem: removeItem, restoreItem: restoreItem, refresh: refresh,
     toggleEpisode: toggleEpisode, setSeasonWatched: setSeasonWatched, seasonProgress: seasonProgress, watchedCount: watchedCount,
     list: list, genres: genres, randomPick: randomPick, stats: stats, fmtMinutes: fmtMinutes, SORTS: SORTS, brief: brief,
