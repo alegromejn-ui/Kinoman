@@ -1,4 +1,4 @@
-/* Кіноман: інтерфейс */
+/* Kinoman: інтерфейс */
 (function () {
   'use strict';
   var F = window.FB;
@@ -79,10 +79,8 @@
   }
   function renderHome() {
     var kk = F.tmdbKeyOf(); if (ui.cat.forKey !== kk) { ui.cat.forKey = kk; ui.cat.data = {}; ui.cat.error = null; ui.cat.loading = false; ui.cat.token++; }
-    var h = '<div class="page-h"><h1 class="logo"><i></i>Кіноман</h1></div>';
-    h += featureHtml();
+    var h = '<div class="page-h"><h1 class="logo"><i></i>Kinoman</h1></div>';
     h += shelfHtml('Дивлюсь зараз', F.list('watching').slice(0, 12), 'watching');
-    h += shelfHtml('Обрані', F.list('want').filter(function (x) { return x.id !== ui.heroId; }).slice(0, 12), 'want');
     h += '<div class="seg cat-seg" role="group" aria-label="Каталог">' + [['movie', 'Фільми'], ['tv', 'Серіали']].map(function (t) { return '<button type="button" data-act="hometype" data-mt="' + t[0] + '" aria-pressed="' + (ui.homeMt === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
     var mt = ui.homeMt, d = ui.cat.data[mt];
     if (!F.tmdbKeyOf()) {
@@ -106,10 +104,29 @@
     } catch (e) { if (tok !== c.token) return; c.error = e; }
     c.loading = false; if (ui.tab === 'home') render();
   }
+  // ---------- Підказки під час набору ----------
+  var suggTimer = null, suggTok = 0;
+  function hideSugg() { clearTimeout(suggTimer); suggTok++; var b = $('#sugg'); if (b) { b.classList.remove('show'); b.innerHTML = ''; } }
+  function queueSugg(now) {
+    clearTimeout(suggTimer);
+    var q = ui.q.trim(); if (q.length < 2 || !F.tmdbKeyOf() || F.isId(q)) { hideSugg(); return; }
+    suggTimer = setTimeout(function () { loadSugg(q); }, now ? 0 : 280);
+  }
+  async function loadSugg(q) {
+    var tok = ++suggTok, items;
+    try { items = await F.suggest(q); } catch (e) { items = null; }
+    var b = $('#sugg'), inp = $('#q');
+    if (tok !== suggTok || !b || !inp || inp.value.trim() !== q || document.activeElement !== inp) return;
+    if (!items || !items.length) { b.classList.remove('show'); b.innerHTML = ''; return; }
+    b.innerHTML = items.map(function (r) {
+      return '<button type="button" class="sg" role="option" data-act="cat" data-mt="' + r.mt + '" data-tid="' + r.tid + '" data-title="' + esc(r.title) + '" data-year="' + esc(r.year) + '" data-poster="' + esc(r.poster) + '"><span class="sp">' + (r.poster ? '<img src="' + esc(F.tmdbImg(r.poster, 'w92')) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : ic('film', 'sm')) + '</span><span class="st"><b>' + esc(r.title) + '</b><span>' + esc([r.mt === 'tv' ? 'Серіал' : 'Фільм', r.year, r.orig].filter(Boolean).join(', ')) + '</span></span>' + (r.vote ? '<span class="sv">★ ' + r.vote.toFixed(1) + '</span>' : '') + '</button>';
+    }).join('');
+    b.classList.add('show');
+  }
   function renderSearch() {
     var h = '<div class="page-h"><h1>Пошук</h1></div>';
     if (!F.keyOf()) h += noKeyHtml();
-    h += '<form class="searchbar" data-form="search" role="search"><input type="search" id="q" name="q" placeholder="' + (F.gemKeyOf() ? 'Назва фільму чи серіалу' : 'Назва англійською або IMDb ID') + '" value="' + esc(ui.q) + '" autocomplete="off" autocapitalize="none" enterkeyhint="search" aria-label="Назва фільму чи серіалу"><button class="btn" type="submit" aria-label="Шукати">' + ic('search') + '</button></form>';
+    h += '<div class="sbox"><form class="searchbar" data-form="search" role="search"><input type="search" id="q" name="q" aria-autocomplete="list" aria-controls="sugg" placeholder="' + (F.gemKeyOf() ? 'Назва фільму чи серіалу' : 'Назва англійською або IMDb ID') + '" value="' + esc(ui.q) + '" autocomplete="off" autocapitalize="none" enterkeyhint="search" aria-label="Назва фільму чи серіалу"><button class="btn" type="submit" aria-label="Шукати">' + ic('search') + '</button></form><div id="sugg" class="sugg" role="listbox" aria-label="Підказки"></div></div>';
     h += '<div class="seg" role="group" aria-label="Тип">' + [['', 'Усе'], ['movie', 'Фільми'], ['series', 'Серіали']].map(function (t) { return '<button type="button" data-act="type" data-type="' + t[0] + '" aria-pressed="' + (ui.type === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
     if (ui.error) h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(ui.error)) + (ui.error.code === 'NEED_GEMINI' ? '<p style="margin:10px 0 0"><button class="btn sm" data-act="tab" data-tab="more">Додати ключ Gemini</button></p>' : '') + '</div></div>';
     if (ui.results.length && ui.translatedAs) h += '<p class="sub" style="margin:0 0 6px">Шукали за оригінальною назвою: ' + esc(ui.translatedAs) + '</p>';
@@ -360,6 +377,7 @@
       case 'hometype': ui.homeMt = el.dataset.mt === 'tv' ? 'tv' : 'movie'; ui.cat.error = null; ui.enter = true; render(); break;
       case 'retrycat': ui.cat.error = null; render(); break;
       case 'cat': {
+        hideSugg(); var qb = $('#q'); if (qb && document.activeElement === qb) qb.blur();
         var ck = 'cat' + el.dataset.tid; if (ui.busy[ck]) return; ui.busy[ck] = true; toast('Відкриваємо…');
         try {
           var imdb0 = await F.tmdbImdbId(el.dataset.mt, el.dataset.tid); toastEl.classList.remove('show');
@@ -472,7 +490,7 @@
     var text = F.exportJSON(), name = 'kinoman-kopiya-' + new Date().toISOString().slice(0, 10) + '.json';
     try {
       var file = new File([text], name, { type: 'application/json' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Копія «Кіноман»' }); ui.backupMsg = { ok: true, text: 'Копію збережено.' }; render(); return; }
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Копія Kinoman' }); ui.backupMsg = { ok: true, text: 'Копію збережено.' }; render(); return; }
     } catch (e) { if (e && e.name === 'AbortError') return; }
     var url = URL.createObjectURL(new Blob([text], { type: 'application/json' })), a = document.createElement('a');
     a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
@@ -480,7 +498,7 @@
   }
   function onSubmit(form) {
     var kind = form.dataset.form;
-    if (kind === 'search') { ui.q = form.elements.q.value; doSearch(false); }
+    if (kind === 'search') { ui.q = form.elements.q.value; hideSugg(); var qi = $('#q'); if (qi) qi.blur(); doSearch(false); }
     if (kind === 'tmdbkey') { F.setTmdbKey(form.elements.tmdbkey.value); ui.tmdbMsg = F.tmdbKeyOf() ? { ok: true, text: 'Ключ збережено. Натисніть «Перевірити ключ».' } : { ok: true, text: 'Ключ видалено.' }; render(); }
     if (kind === 'gemkey') { F.setGemKey(form.elements.gemkey.value); ui.gemMsg = F.gemKeyOf() ? { ok: true, text: 'Ключ збережено. Натисніть «Перевірити ключ».' } : { ok: true, text: 'Ключ видалено.' }; ui.error = null; render(); }
     if (kind === 'key') {
@@ -509,11 +527,15 @@
         rd.readAsText(el.files[0]);
       }
     });
-    document.addEventListener('input', function (e) { var el = e.target; if (el.dataset && el.dataset.input === 'note' && ui.sheet) F.setNote(ui.sheet.id, el.value); });
+    document.addEventListener('input', function (e) { var el = e.target; if (el.id === 'q') { ui.q = el.value; queueSugg(); return; } if (el.dataset && el.dataset.input === 'note' && ui.sheet) F.setNote(ui.sheet.id, el.value); });
+    // тап по підказці не забирає фокус у поля, тож список не зникає раніше за клік
+    document.addEventListener('mousedown', function (e) { if (e.target.closest && e.target.closest('#sugg')) e.preventDefault(); });
+    document.addEventListener('focusin', function (e) { if (e.target.id === 'q' && e.target.value.trim().length >= 2) queueSugg(true); });
+    document.addEventListener('focusout', function (e) { if (e.target.id === 'q') setTimeout(function () { var a = document.activeElement; if (!a || !a.closest || !a.closest('#sugg')) hideSugg(); }, 180); });
     document.addEventListener('error', function (e) {
       var t = e.target; if (t && t.tagName === 'IMG' && t.closest('.poster')) t.remove();
     }, true);
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && ui.sheet) closeSheet(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if ($('#sugg.show')) { hideSugg(); return; } if (ui.sheet) closeSheet(); } });
     render();
     if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () { });
   }

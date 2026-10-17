@@ -1,8 +1,8 @@
-/* Кіноман: логіка. Дані фільмів беруться з OMDb API, а ваші списки, оцінки й нотатки лежать лише в цьому телефоні. */
+/* Kinoman: логіка. Дані фільмів беруться з OMDb API, а ваші списки, оцінки й нотатки лежать лише в цьому телефоні. */
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v7';
+  var VERSION = 'v8';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -226,6 +226,19 @@
       var v = Number(r.vote_average); return { tid: Math.floor(r.id), mt: mt, title: clean(r.title || r.name), year: yearOf(r.release_date || r.first_air_date), poster: r.poster_path, vote: v > 0 ? round1(v) : null };
     });
     catCache[ck] = { t: FB.now(), items: items }; return items;
+  }
+  // Підказки під час набору: TMDB шукає і українською, і англійською
+  var sugCache = {}, sugKeys = [];
+  async function suggest(q) {
+    q = clean(q).slice(0, 80); if (q.length < 2) return [];
+    var ck = q.toLowerCase(); if (sugCache[ck]) return sugCache[ck];
+    var d = await tmdb('/search/multi', { query: q, language: 'uk-UA', include_adult: 'false', page: 1 });
+    var items = (Array.isArray(d.results) ? d.results : []).filter(function (r) { return r && r.id > 0 && (r.media_type === 'movie' || r.media_type === 'tv') && clean(r.title || r.name); }).slice(0, 8).map(function (r) {
+      var title = clean(r.title || r.name), orig = clean(r.original_title || r.original_name), v = Number(r.vote_average);
+      return { tid: Math.floor(r.id), mt: r.media_type, title: title, orig: orig && orig !== title ? orig : '', year: yearOf(r.release_date || r.first_air_date), poster: imgPath(r.poster_path), vote: v > 0 ? round1(v) : null };
+    });
+    sugCache[ck] = items; sugKeys.push(ck); if (sugKeys.length > 60) delete sugCache[sugKeys.shift()];
+    return items;
   }
   async function testTmdb() { await tmdb('/configuration', {}); return true; }
 
@@ -451,7 +464,7 @@
   }
   function importJSON(text) {
     var o; try { o = JSON.parse(text); } catch (e) { return { error: 'Це не файл копії: не вдалося прочитати.' }; }
-    if (!o || o.app !== 'kino' || !o.items || typeof o.items !== 'object') return { error: 'Це не файл копії «Кіноман».' };
+    if (!o || o.app !== 'kino' || !o.items || typeof o.items !== 'object') return { error: 'Це не файл копії Kinoman.' };
     var added = 0, updated = 0;
     Object.keys(o.items).slice(0, 5000).forEach(function (k) {
       var n = normalizeItem(o.items[k]); if (!n) return; var ex = S.items[n.id];
@@ -462,7 +475,7 @@
 
   Object.assign(FB, {
     VERSION: VERSION, init: init, on: on, save: save, isSaveFailed: function () { return saveFailed; },
-    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, tmdbImdbId: tmdbImdbId, catalog: catalog, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
+    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, tmdbImdbId: tmdbImdbId, catalog: catalog, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
     getItem: getItem, setStatus: setStatus, setMyRating: setMyRating, setNote: setNote, removeItem: removeItem, restoreItem: restoreItem, refresh: refresh,
     toggleEpisode: toggleEpisode, setSeasonWatched: setSeasonWatched, seasonProgress: seasonProgress, watchedCount: watchedCount,
     list: list, genres: genres, randomPick: randomPick, stats: stats, fmtMinutes: fmtMinutes, SORTS: SORTS, brief: brief,
