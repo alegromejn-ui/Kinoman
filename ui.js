@@ -15,6 +15,7 @@
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function ic(n, c) { return '<svg class="ic ' + (c || '') + '" aria-hidden="true"><use href="#i-' + n + '"/></svg>'; }
+  function hue(id) { return ((parseInt(String(id).replace(/\D/g, ''), 10) || 0) * 137) % 360; }
   function typeLabel(t) { return t === 'series' ? 'Серіал' : 'Фільм'; }
   function plural(n, a, b, c) { var m = n % 100, d = n % 10; return (m > 10 && m < 20) ? c : d === 1 ? a : (d >= 2 && d <= 4) ? b : c; }
 
@@ -43,12 +44,25 @@
     var acts;
     if (lib) acts = '<button class="chip on" data-act="open" data-id="' + r.id + '">' + ic('check', 'sm') + (lib.status === 'seen' ? 'Бачив' : 'Хочу') + '</button>';
     else acts = '<button class="chip" data-act="quick" data-st="want" data-id="' + r.id + '"' + (busy ? ' disabled' : '') + '>' + ic('plus', 'sm') + 'Хочу</button><button class="chip" data-act="quick" data-st="seen" data-id="' + r.id + '"' + (busy ? ' disabled' : '') + '>' + ic('eye', 'sm') + 'Бачив</button>';
-    return '<div class="row"><button class="open" data-act="open" data-id="' + r.id + '">' + posterHtml(r.poster, r.title) + '<span class="txt"><span class="t">' + esc(r.title) + '</span><span class="m">' + esc(typeLabel(r.type)) + (r.year ? ', ' + esc(r.year) : '') + '</span></span></button><div class="acts">' + acts + '</div></div>';
+    return '<div class="row glow" style="--h:' + hue(r.id) + '"><button class="open" data-act="open" data-id="' + r.id + '">' + posterHtml(r.poster, r.title) + '<span class="txt"><span class="t">' + esc(r.title) + '</span><span class="m">' + esc(typeLabel(r.type)) + (r.year ? ', ' + esc(r.year) : '') + '</span></span></button><div class="acts">' + acts + '</div></div>';
+  }
+  function featureHtml() {
+    if (ui.loading || ui.results.length || ui.searched || ui.q.trim()) return '';
+    var want = F.list('want'); if (!want.length) return '';
+    var it = ui.heroId && F.getItem(ui.heroId) && F.getItem(ui.heroId).status === 'want' ? F.getItem(ui.heroId) : null;
+    if (!it) { it = F.randomPick('want'); ui.heroId = it.id; }
+    var r = it.ratings, pills = '';
+    if (r.imdb != null) pills += '<span class="pill">IMDb ' + r.imdb.toFixed(1) + '</span>';
+    if (r.rt != null) pills += '<span class="pill rt' + (r.rt >= 60 ? ' good' : '') + '">' + r.rt + '%</span>';
+    if (r.meta != null) pills += '<span class="pill mt">MC ' + r.meta + '</span>';
+    return '<section class="feature glow" style="--h:' + hue(it.id) + '" aria-label="Що подивитись"><div class="bg" style="' + (it.poster ? 'background-image:url(\'' + esc(it.poster) + '\')' : '') + '"></div><div class="in">' + posterHtml(it.poster, it.title) +
+      '<div class="tx"><div class="lbl">Що подивитись сьогодні</div><h3>' + esc(it.titleUk || it.title) + '</h3><div class="meta">' + esc(typeLabel(it.type)) + (it.year ? ', ' + esc(it.year) : '') + (it.runtime ? ', ' + esc(F.fmtMinutes(it.runtime)) : '') + '</div>' + (pills ? '<div class="rates">' + pills + '</div>' : '') +
+      '<div class="acts"><button class="btn sm" data-act="open" data-id="' + it.id + '">Відкрити</button>' + (want.length > 1 ? '<button class="btn ghost sm" data-act="rehero" aria-label="Інший фільм">' + ic('shuffle', 'sm') + 'Інший</button>' : '') + '</div></div></div></section>';
   }
   function renderSearch() {
-    var h = '<div class="page-h"><h1>Кіноман</h1></div>';
+    var h = '<div class="page-h"><h1 class="logo"><i></i>Кіноман</h1></div>' + featureHtml();
     if (!F.keyOf()) h += noKeyHtml();
-    h += '<form class="searchbar" data-form="search" role="search"><input type="search" id="q" name="q" placeholder="' + (F.gemKeyOf() ? 'Назва українською чи англійською' : 'Назва англійською або ID з IMDb') + '" value="' + esc(ui.q) + '" autocomplete="off" autocapitalize="none" enterkeyhint="search" aria-label="Назва фільму чи серіалу"><button class="btn" type="submit" aria-label="Шукати">' + ic('search') + '</button></form>';
+    h += '<form class="searchbar" data-form="search" role="search"><input type="search" id="q" name="q" placeholder="' + (F.gemKeyOf() ? 'Назва фільму чи серіалу' : 'Назва англійською або IMDb ID') + '" value="' + esc(ui.q) + '" autocomplete="off" autocapitalize="none" enterkeyhint="search" aria-label="Назва фільму чи серіалу"><button class="btn" type="submit" aria-label="Шукати">' + ic('search') + '</button></form>';
     h += '<div class="seg" role="group" aria-label="Тип">' + [['', 'Усе'], ['movie', 'Фільми'], ['series', 'Серіали']].map(function (t) { return '<button type="button" data-act="type" data-type="' + t[0] + '" aria-pressed="' + (ui.type === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
     if (ui.error) h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(ui.error)) + (ui.error.code === 'NEED_GEMINI' ? '<p style="margin:10px 0 0"><button class="btn sm" data-act="tab" data-tab="more">Додати ключ Gemini</button></p>' : '') + '</div></div>';
     if (ui.results.length && ui.translatedAs) h += '<p class="sub" style="margin:0 0 6px">Шукали за оригінальною назвою: ' + esc(ui.translatedAs) + '</p>';
@@ -81,7 +95,7 @@
     if (it.ratings.imdb != null) b += '<span>' + it.ratings.imdb.toFixed(1) + '</span>';
     if (it.myRating) b += '<span class="me" title="Моя оцінка">' + it.myRating + '</span>';
     else if (it.type === 'series' && F.watchedCount(it)) b += '<span class="done">' + F.watchedCount(it) + ' еп.</span>';
-    return '<button class="card" data-act="open" data-id="' + it.id + '">' + '<span class="poster"><span class="ph">' + esc(it.title) + '</span>' + (it.poster ? '<img src="' + esc(it.poster) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '') + '<span class="badge">' + b + '</span></span><span class="name">' + esc(it.titleUk || it.title) + '</span><span class="yr">' + esc(it.year) + '</span></button>';
+    return '<button class="card glow" style="--h:' + hue(it.id) + '" data-act="open" data-id="' + it.id + '">' + '<span class="poster"><span class="ph">' + esc(it.title) + '</span>' + (it.poster ? '<img src="' + esc(it.poster) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '') + '<span class="badge">' + b + '</span></span><span class="name">' + esc(it.titleUk || it.title) + '</span><span class="yr">' + esc(it.year) + '</span></button>';
   }
   function renderList(status) {
     var f = ui.lists[status], all = F.list(status), items = F.list(status, f);
@@ -190,12 +204,16 @@
       '<div class="score ' + scoreClass('rt', r.rt) + '"><div class="v">' + (r.rt != null ? r.rt + '<small>%</small>' : '—') + '</div><div class="n">Rotten Tomatoes</div></div>' +
       '<div class="score ' + scoreClass('meta', r.meta) + '"><div class="v">' + (r.meta != null ? r.meta + '<small>/100</small>' : '—') + '</div><div class="n">Metacritic</div></div></div>';
     if (it.genre.length) h += '<div class="tags">' + it.genre.map(function (g) { return '<span class="tag">' + esc(F.genreUk(g)) + '</span>'; }).join('') + '</div>';
-    h += '<div class="status"><button class="btn ghost' + (lib && lib.status === 'want' ? ' on' : '') + '" data-act="status" data-st="want" aria-pressed="' + !!(lib && lib.status === 'want') + '">' + ic('bookmark', 'sm') + 'Хочу</button><button class="btn ghost' + (lib && lib.status === 'seen' ? ' on' : '') + '" data-act="status" data-st="seen" aria-pressed="' + !!(lib && lib.status === 'seen') + '">' + ic('eye', 'sm') + 'Переглянуто</button></div>';
-    if (lib && lib.status === 'seen' && lib.seenAt) h += '<p class="sub" style="margin:6px 0 0">Переглянуто ' + esc(new Date(lib.seenAt).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })) + '</p>';
-    h += '<h2>Моя оцінка' + (lib && lib.myRating ? ': ' + lib.myRating + ' з 10' : '') + '</h2><div class="scale" role="group" aria-label="Моя оцінка">';
-    for (var i = 1; i <= 10; i++) h += '<button type="button" data-act="rate" data-n="' + i + '" class="' + (lib && lib.myRating === i ? 'on' : lib && lib.myRating && i < lib.myRating ? 'fill' : '') + '" aria-pressed="' + !!(lib && lib.myRating === i) + '">' + i + '</button>';
+    var seen = !!(lib && lib.status === 'seen');
+    h += '<div class="ticket"><div class="tk-top">' + (seen ? '<span class="stamp' + (sh.stamp ? ' pop' : '') + '">ПЕРЕГЛЯНУТО</span>' : '') +
+      '<div class="status"><button class="btn ghost' + (lib && lib.status === 'want' ? ' on' : '') + '" data-act="status" data-st="want" aria-pressed="' + !!(lib && lib.status === 'want') + '">' + ic('bookmark', 'sm') + 'Хочу</button><button class="btn ghost' + (seen ? ' on' : '') + '" data-act="status" data-st="seen" aria-pressed="' + seen + '">' + ic('eye', 'sm') + 'Переглянуто</button></div>';
+    if (seen && lib.seenAt) h += '<p class="tk-date">Переглянуто ' + esc(new Date(lib.seenAt).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })) + '</p>';
+    sh.stamp = false;
+    h += '</div><div class="tk-cut"><i></i></div><div class="tk-bot"><div class="tk-h">Моя оцінка' + (lib && lib.myRating ? ': ' + lib.myRating + ' з 10' : '') + '</div><div class="scale" role="group" aria-label="Моя оцінка">';
+    for (var i = 1; i <= 10; i++) h += '<button type="button" data-act="rate" data-n="' + i + '" class="' + (lib && lib.myRating === i ? 'on' : lib && lib.myRating && i < lib.myRating ? 'fill' : '') + '" aria-label="Оцінка ' + i + '" aria-pressed="' + !!(lib && lib.myRating === i) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.6l-5.8 3.1 1.1-6.5L2.6 9.6l6.5-.9z"/></svg></button>';
     h += '</div>';
-    if (lib) h += '<label class="fl" for="note">Нотатка</label><textarea id="note" data-input="note" maxlength="1000" placeholder="З ким дивились, що сподобалось, кому порадити">' + esc(lib.note) + '</textarea>';
+    if (lib) h += '<div class="tk-note"><label class="fl" for="note">Нотатка</label><textarea id="note" data-input="note" maxlength="1000" placeholder="З ким дивились, що сподобалось, кому порадити">' + esc(lib.note) + '</textarea></div>';
+    h += '</div></div>';
     if (it.plot) {
       var showUk = tr.plotUk && !sh.showOrig;
       h += '<h2>Сюжет</h2><p class="plot">' + esc(showUk ? tr.plotUk : it.plot) + '</p>';
@@ -296,14 +314,19 @@
       case 'status': {
         var cur = F.getItem(ui.sheet.id), it0 = sheetItem(); if (!it0) return;
         if (cur && cur.status === el.dataset.st) { break; }
+        if (el.dataset.st === 'seen') ui.sheet.stamp = true;
         F.setStatus(it0, el.dataset.st); break;
       }
       case 'rate': {
         var it1 = sheetItem(); if (!it1) return;
-        if (!F.getItem(it1.id)) F.setStatus(it1, 'seen');
-        else if (F.getItem(it1.id).status === 'want' && F.getItem(it1.id).myRating == null) F.setStatus(F.getItem(it1.id), 'seen');
-        F.setMyRating(it1.id, Number(el.dataset.n)); break;
+        var lib1 = F.getItem(it1.id), becameSeen = false;
+        if (!lib1) { F.setStatus(it1, 'seen'); becameSeen = true; }
+        else if (lib1.status === 'want' && lib1.myRating == null) { F.setStatus(lib1, 'seen'); becameSeen = true; }
+        F.setMyRating(it1.id, Number(el.dataset.n));
+        if (becameSeen && ui.sheet) { ui.sheet.stamp = true; renderSheet(); }
+        break;
       }
+      case 'rehero': { var cur0 = ui.heroId, tries = 0, nx; do { nx = F.randomPick('want'); } while (nx && nx.id === cur0 && F.list('want').length > 1 && ++tries < 20); if (nx) ui.heroId = nx.id; render(); break; }
       case 'sheet-more': closeSheet(); setTab('more'); break;
       case 'extras': loadExtras(true); break;
       case 'back': { var prev = ui.stack.pop(); if (prev) openSheet(prev.id, prev.brief); break; }

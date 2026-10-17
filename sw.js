@@ -1,7 +1,7 @@
 /* Сервісний воркер: каркас додатка відкривається без інтернету.
    Сторінка береться з мережі (щоб приходили оновлення), а коли мережі немає, з кешу.
    Запити до OMDb і постери йдуть на інші адреси й сюди не потрапляють. */
-const VERSION = 'kinoman-v4';
+const VERSION = 'kinoman-v5';
 const SHELL = ['./', 'index.html', 'styles.css', 'core.js', 'ui.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png',
   'fonts/onest-cyrillic-ext-wght-normal.woff2', 'fonts/onest-cyrillic-wght-normal.woff2', 'fonts/onest-latin-ext-wght-normal.woff2', 'fonts/onest-latin-wght-normal.woff2',
   'fonts/unbounded-cyrillic-ext-wght-normal.woff2', 'fonts/unbounded-cyrillic-wght-normal.woff2', 'fonts/unbounded-latin-wght-normal.woff2'];
