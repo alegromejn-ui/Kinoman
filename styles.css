@@ -295,3 +295,89 @@ a.btn{text-decoration:none}
 .sg .st b{display:block;font-weight:700;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sg .st span{display:block;font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
 .sg .sv{flex:none;font-size:12px;font-weight:800;color:var(--gold-text)}
+
+/* Де дивитись і трейлер */
+.watch{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+.watch .btn{flex:1 1 auto;min-width:0}
+.watch .trailer{background:#FF0033;color:#fff;box-shadow:0 10px 22px -12px #FF0033}
+
+/* Серіал: що далі */
+.nextinfo{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:22px 0 0}
+.nextinfo div{background:var(--surface);border-radius:16px;padding:12px 14px;box-shadow:inset 0 0 0 1px var(--line)}
+.nextinfo div:first-child:last-child{grid-column:1/-1}
+.nextinfo span{display:block;font-size:12px;color:var(--muted)}
+.nextinfo b{display:block;font:800 16px/1.25 var(--display);margin-top:4px;letter-spacing:-.01em}
+.card .nx{display:inline-block;margin-top:6px;padding:3px 8px;border-radius:9px;background:var(--accent);color:var(--on-accent);font:800 11px/1.2 var(--font)}
+
+/* Порада від Gemini */
+.advice{margin:6px 0 4px;padding:16px;border-radius:24px;background:radial-gradient(120% 140% at 0 0,color-mix(in srgb,var(--accent) 22%,var(--surface)),var(--surface) 60%);box-shadow:inset 0 0 0 1px var(--line)}
+.adv-h{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.adv-h .btn{white-space:nowrap;flex:none}
+.adv-h h2{margin:0;font:800 18px/1.2 var(--display)}
+.adv-h .sub{margin:2px 0 0}
+.adv-list{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.adv{display:block;width:100%;text-align:left;padding:12px 14px;border-radius:16px;background:color-mix(in srgb,var(--bg) 55%,transparent);box-shadow:inset 0 0 0 1px var(--line)}
+.adv:active{transform:scale(.99)}
+.adv b{display:block;font-weight:800}
+.adv .m{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.adv .w{display:block;font-size:14px;margin-top:6px;line-height:1.4}
+.advice .spin{margin:18px auto 6px}
+
+/* Сітка постерів з TMDB */
+.tgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 10px;margin-top:14px}
+.tgrid .tile{width:auto}
+.tile .role{display:block;font-size:11px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Підбір у пошуку */
+.filters{margin-top:20px}
+.filters h2{font:800 19px/1.2 var(--display);margin:0 0 10px}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fgrid select{min-height:42px;padding:6px 12px;font-size:14px;border-radius:21px}
+.fgrid select:first-child{grid-column:1/-1}
+
+/* Актор */
+button.person{background:none}
+button.person[disabled]{cursor:default;opacity:1}
+.phero{display:flex;flex-direction:column;align-items:center;text-align:center;padding:56px 16px 10px;background:radial-gradient(90% 70% at 50% 0,color-mix(in srgb,var(--accent) 26%,transparent),transparent 70%);border-radius:28px 28px 0 0}
+.pic.big{position:relative;display:block;width:132px;height:132px;border-radius:50%;overflow:hidden;background:var(--surface);box-shadow:0 0 0 3px var(--bg),0 0 0 6px color-mix(in srgb,var(--accent) 60%,transparent),0 20px 40px -16px var(--accent)}
+.pic.big .ph{position:absolute;inset:0;display:grid;place-items:center;font:800 34px/1 var(--display);color:var(--muted)}
+.pic.big img{position:absolute;inset:0;z-index:1;width:100%;height:100%;object-fit:cover}
+.phero h3{font:800 24px/1.15 var(--display);letter-spacing:-.02em;margin:16px 0 4px}
+.phero .meta{color:var(--muted);font-size:14px}
+.bio{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+.bio.open{display:block}
+
+/* Добірки */
+.chips.cols{flex-wrap:wrap;overflow:visible;padding:0;margin:0}
+.collist{display:flex;flex-direction:column;gap:6px}
+.colrow{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 14px;border-radius:16px;background:var(--raised);box-shadow:inset 0 0 0 1px var(--line)}
+.colrow b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.colrow .sub{margin:0 6px 0 0}
+.icon-btn.sm{width:38px;height:38px;border-radius:19px;font-size:16px}
+
+/* Підсумок року */
+.yearcard{background:radial-gradient(130% 120% at 100% 0,color-mix(in srgb,var(--accent) 24%,var(--surface)),var(--surface) 62%)}
+.yearcard h2{font:800 20px/1.2 var(--display)}
+.ybig{display:flex;flex-wrap:wrap;gap:10px 22px;margin:4px 0 10px}
+.ybig b{display:block;font:900 30px/1 var(--display);letter-spacing:-.03em;color:var(--accent)}
+.ybig div:nth-child(2) b{color:var(--gold)}
+.ybig span{font-size:12.5px;color:var(--muted)}
+.ytop{margin:12px 0 0;padding:0;list-style:none;counter-reset:t}
+.ytop li{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line);counter-increment:t}
+.ytop li::before{content:counter(t);width:22px;font:800 14px/1 var(--display);color:var(--muted)}
+.ytop li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.ytop li b{font:900 18px/1 var(--display);color:var(--gold)}
+
+/* Колесо */
+.wheel-wrap{padding:56px 16px 8px;text-align:center}
+.wheel-wrap h3{font:800 26px/1.1 var(--display);margin:0 0 4px}
+.wheel{position:relative;width:min(84vw,340px);margin:22px auto 8px}
+.wheel svg{display:block;width:100%;height:auto;border-radius:50%;box-shadow:0 0 0 6px var(--surface),0 0 0 8px color-mix(in srgb,var(--gold) 70%,transparent),0 0 60px -6px color-mix(in srgb,var(--accent) 60%,transparent)}
+.wheel .pin{position:absolute;left:50%;top:-14px;z-index:2;width:0;height:0;transform:translateX(-50%);border-left:14px solid transparent;border-right:14px solid transparent;border-top:26px solid var(--gold);filter:drop-shadow(0 4px 6px rgba(0,0,0,.6))}
+.wt{fill:#fff;font:700 11.5px var(--font);dominant-baseline:middle}
+.hub{fill:var(--bg);stroke:var(--gold);stroke-width:3}
+.wres{margin:18px 0 6px}
+.wres .sub{display:block;margin:0 0 4px}
+.wres b{display:block;font:800 22px/1.2 var(--display);margin-bottom:14px}
+.wres .acts{display:flex;justify-content:center;gap:10px}
+@media (prefers-reduced-motion:reduce){.wheel svg{transition:none!important}}
