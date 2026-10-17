@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v14';
+  var VERSION = 'v16';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -238,7 +238,7 @@
     if (cat === 'tv') {
       add('t-trend', 'У тренді цього тижня', 'tv', '/trending/tv/week');
       add('t-now', 'Виходять зараз', 'tv', '/tv/on_the_air');
-      add('t-top', 'Топ 50 серіалів за рейтингом', 'tv', '/discover/tv', best(1500), 0, 50);
+      add('t-top', 'Топ 100 серіалів за рейтингом', 'tv', '/discover/tv', best(1000), 0, 100);
       add('t-pop', 'Популярні', 'tv', '/tv/popular');
       add('t-gems', 'Приховані перлини', 'tv', '/discover/tv', best(200, { 'vote_average.gte': 7.8, 'vote_count.lte': 1500 }));
       add('t-2020', 'Найкращі 2020-х', 'tv', '/discover/tv', best(500, dates('tv', '2020-01-01', '2029-12-31')));
@@ -256,18 +256,18 @@
     } else if (cat === 'toon') {
       add('c-pop', 'Мультфільми: популярні', 'movie', '/discover/movie', { with_genres: '16' }, 1);
       add('c-new', 'Нові мультфільми', 'movie', '/discover/movie', ext({ with_genres: '16' }, dates('movie', yAgo, '')), 1);
-      add('c-top', 'Топ 50 мультфільмів за рейтингом', 'movie', '/discover/movie', best(2000, { with_genres: '16' }), 1, 50);
+      add('c-top', 'Топ 100 мультфільмів за рейтингом', 'movie', '/discover/movie', best(1000, { with_genres: '16' }), 1, 100);
       add('c-fam', 'Для всієї родини', 'movie', '/discover/movie', { with_genres: '16,10751' }, 1);
       add('c-old', 'Класичні мультфільми', 'movie', '/discover/movie', best(500, ext({ with_genres: '16' }, dates('movie', '', '1999-12-31'))), 1);
       add('c-spop', 'Мультсеріали: популярні', 'tv', '/discover/tv', { with_genres: '16' }, 1);
-      add('c-stop', 'Топ 50 мультсеріалів за рейтингом', 'tv', '/discover/tv', best(500, { with_genres: '16' }), 1, 50);
+      add('c-stop', 'Топ 100 мультсеріалів за рейтингом', 'tv', '/discover/tv', best(200, { with_genres: '16' }), 1, 100);
       add('c-scom', 'Комедійні мультсеріали', 'tv', '/discover/tv', { with_genres: '16,35' }, 1);
       add('c-am', 'Аніме: фільми', 'movie', '/discover/movie', best(300, { with_genres: '16', with_original_language: 'ja' }), 1);
       add('c-as', 'Аніме: серіали', 'tv', '/discover/tv', best(300, { with_genres: '16', with_original_language: 'ja' }), 1);
     } else {
       add('m-trend', 'У тренді цього тижня', 'movie', '/trending/movie/week');
       add('m-now', 'Зараз у кінотеатрах', 'movie', '/movie/now_playing', { region: 'UA' });
-      add('m-top', 'Топ 50 фільмів за рейтингом', 'movie', '/discover/movie', best(7000), 0, 50);
+      add('m-top', 'Топ 100 фільмів за рейтингом', 'movie', '/discover/movie', best(5000), 0, 100);
       add('m-pop', 'Популярні', 'movie', '/movie/popular');
       add('m-gems', 'Приховані перлини', 'movie', '/discover/movie', best(300, { 'vote_average.gte': 7.4, 'vote_count.lte': 2500 }));
       add('m-2020', 'Найкращі 2020-х', 'movie', '/discover/movie', best(1000, dates('movie', '2020-01-01', '2029-12-31')));
