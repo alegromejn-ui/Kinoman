@@ -5,7 +5,7 @@
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var app, tabsEl, sheetRoot, toastEl;
   var ui = {
-    tab: 'home', homeMt: 'movie', homeGenre: '', dc: {}, advice: null, fl: { mt: 'movie', genre: '', decade: '', vote: '' }, syncMsg: null, colMsg: null, cat: { data: {}, loading: false, error: null, token: 0 },
+    tab: 'home', homeMt: 'movie', homeGenre: '', dc: {}, advice: null, fl: { mt: 'movie', genre: '', decade: '', vote: '' }, syncMsg: null, colMsg: null, duo: { a: [], b: [], max: 0, type: '' }, cat: { sh: {}, shown: { movie: 5, tv: 5, toon: 5 }, forKey: null, token: 0 },
     q: '', type: '', results: [], total: 0, page: 0, loading: false, searched: false, error: null, token: 0,
     lists: { want: { sort: 'added', type: '', genre: '' }, watching: { sort: 'added', type: '', genre: '' }, seen: { sort: 'seen', type: '', genre: '' } },
     busy: {}, stack: [], sheet: null, enter: false, tmdbMsg: null, keyMsg: null, backupMsg: null
@@ -83,12 +83,20 @@
   // Спільний завантажувач добірок TMDB: стан за ключем, повтор після помилки
   function disc(key, fn) {
     var d = ui.dc[key];
-    if (!d) { d = ui.dc[key] = { key: key, loading: true, items: null, error: null }; fn().then(function (r) { d.items = r; }, function (e) { d.error = e; }).then(function () {
-      d.loading = false;
-      // оновлюємо лише блок результатів, щоб не збити набір у полі пошуку
-      var box = app && app.querySelector('[data-disc="' + key + '"]'); if (box) box.innerHTML = discInner(d); else if (ui.tab === 'home' || ui.tab === 'search') render();
+    if (!d) { d = ui.dc[key] = { key: key, fn: fn, page: 1, loading: true, items: null, more: false, error: null, busy: false }; fn(1).then(function (r) { d.items = r.items; d.more = r.more; }, function (e) { d.error = e; }).then(function () {
+      d.loading = false; paintDisc(d, true);
     }); }
     return d;
+  }
+  // оновлюємо лише блок результатів, щоб не збити набір у полі пошуку
+  function paintDisc(d, fallback) {
+    var box = app && app.querySelector('[data-disc="' + d.key + '"]'); if (box) box.innerHTML = discInner(d); else if (fallback && (ui.tab === 'home' || ui.tab === 'search')) render();
+  }
+  async function discMore(key) {
+    var d = ui.dc[key]; if (!d || d.busy || !d.more) return; d.busy = true; paintDisc(d);
+    try { var r = await d.fn(d.page + 1); d.page++; var seen = {}; d.items.forEach(function (x) { seen[x.mt + x.tid] = 1; }); r.items.forEach(function (x) { if (!seen[x.mt + x.tid]) d.items.push(x); }); d.more = r.more; }
+    catch (e) { toast(F.describeError(e)); }
+    d.busy = false; paintDisc(d);
   }
   function discOpts(mt, genre, decade, vote) { return { genre: genre === 'anime' ? 0 : Number(genre) || 0, anime: genre === 'anime', decade: Number(decade) || 0, minVote: Number(vote) || 0 }; }
   function discGrid(d) { return '<div data-disc="' + esc(d.key) + '">' + discInner(d) + '</div>'; }
@@ -96,7 +104,7 @@
     if (d.loading) return '<div class="spin" role="status" aria-label="Завантажуємо"></div>';
     if (d.error) return '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(d.error)) + '<p style="margin:10px 0 0"><button class="btn sm" data-act="redisc">Спробувати ще раз</button></p></div></div>';
     if (!d.items.length) return emptyHtml('film', 'Нічого не знайшли', 'Спробуйте м’якші фільтри.');
-    return '<div class="tgrid">' + d.items.map(catTile).join('') + '</div>';
+    return '<div class="tgrid">' + d.items.map(catTile).join('') + '</div>' + (d.busy ? '<div class="spin" role="status" aria-label="Завантажуємо"></div>' : d.more ? '<p class="morewrap"><button class="btn ghost sm" data-act="discmore" data-key="' + esc(d.key) + '">Показати ще</button></p>' : '');
   }
   function adviceHtml() {
     if (!F.gemKeyOf()) return '';
@@ -107,42 +115,91 @@
     else if (a && a.items) h += '<div class="adv-list">' + a.items.map(function (x, i) { return '<button class="adv" data-act="adv-open" data-i="' + i + '"><b>' + esc(x.title || x.orig) + '</b><span class="m">' + esc([x.mt === 'tv' ? 'Серіал' : 'Фільм', x.year, x.orig && x.orig !== x.title ? x.orig : ''].filter(Boolean).join(', ')) + '</span><span class="w">' + esc(x.why) + '</span></button>'; }).join('') + '</div>';
     return h + '</section>';
   }
+  function ago(d) { return d <= 0 ? 'сьогодні' : d === 1 ? 'вчора' : d + ' ' + plural(d, 'день', 'дні', 'днів') + ' тому'; }
+  function newsHtml() {
+    var n = F.newEpisodes(); if (!n.length) return '';
+    return '<section class="news"><h2>Вийшло нове</h2>' + n.map(function (x) {
+      return '<div class="newrow glow" style="--h:' + hue(x.item.id) + '"><button class="nopen" data-act="open" data-id="' + x.item.id + '"><span class="poster"><span class="ph">' + esc(x.item.title) + '</span>' + (x.item.poster ? '<img src="' + esc(x.item.poster) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') + '</span><span class="nt"><b>' + esc(x.item.titleUk || x.item.title) + '</b><span>Серія S' + x.ep.s + 'E' + x.ep.e + (x.ep.name ? ', ' + esc(x.ep.name) : '') + '</span><span class="when">' + ago(x.days) + '</span></span></button>' +
+        '<button class="chip" data-act="markep" data-id="' + x.item.id + '" data-s="' + x.ep.s + '" data-e="' + x.ep.e + '" aria-label="Уже переглянув серію">' + ic('check', 'sm') + 'Бачив</button></div>';
+    }).join('') + '</section>';
+  }
+  function soonHtml() {
+    var u = F.upcoming(); if (!u.length) return '';
+    return '<section class="soon"><h2>Скоро</h2><div class="soonlist">' + u.map(function (x) {
+      var p = x.date.split('-'), d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+      return '<button class="soonrow" data-act="open" data-id="' + x.item.id + '"><span class="sd"><b>' + d.getDate() + '</b><span>' + ['січ', 'лют', 'бер', 'кві', 'тра', 'чер', 'лип', 'сер', 'вер', 'жов', 'лис', 'гру'][d.getMonth()] + '</span></span><span class="st"><b>' + esc(x.item.titleUk || x.item.title) + '</b><span>' + esc(x.label) + '</span></span></button>';
+    }).join('') + '</div></section>';
+  }
   function plainShelf(title, items) {
     if (!items.length) return '';
     return '<section class="shelf"><div class="shelf-h"><h2>' + esc(title) + '</h2><span class="sub">' + items.length + '</span></div><div class="strip">' + items.slice(0, 20).map(tileHtml).join('') + '</div></section>';
   }
+  // ---------- Добірки каталогу ----------
+  function shelfState(def) { return ui.cat.sh[def.id]; }
+  function shelfSection(def) {
+    var st = shelfState(def); if (!st) return '';
+    var h = '<section class="shelf" data-shelf="' + esc(def.id) + '"><div class="shelf-h"><h2>' + esc(def.title) + '</h2>' + (st.items && st.items.length ? '<button class="more-link" data-act="coll" data-id="' + esc(def.id) + '">Усі</button>' : '') + '</div>';
+    if (st.loading) return h + '<div class="spin" role="status" aria-label="Завантажуємо"></div></section>';
+    if (st.error) return h + '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(st.error)) + '<p style="margin:10px 0 0"><button class="btn sm" data-act="reshelf" data-id="' + esc(def.id) + '">Спробувати ще раз</button></p></div></div></section>';
+    if (!st.items.length) return '';
+    return h + '<div class="strip">' + st.items.map(catTile).join('') + '</div></section>';
+  }
+  function paintShelf(def) {
+    var box = app && app.querySelector('[data-shelf="' + def.id + '"]'); if (!box) return;
+    var html = shelfSection(def); if (html) box.outerHTML = html; else box.remove();
+  }
+  function loadShelf(def) {
+    var tok = ui.cat.token, st = ui.cat.sh[def.id] = { loading: true, items: null, more: false, error: null };
+    F.collection(def.id, 1).then(function (r) { st.items = r.items; st.more = r.more; }, function (e) { st.error = e; }).then(function () {
+      if (tok !== ui.cat.token) return; st.loading = false; paintShelf(def);
+    });
+  }
+  function ensureShelves() {
+    if (ui.tab !== 'home' || !F.tmdbKeyOf() || (ui.homeGenre && ui.homeMt !== 'toon')) return;
+    F.collDefs(ui.homeMt).slice(0, ui.cat.shown[ui.homeMt]).forEach(function (d) { if (!ui.cat.sh[d.id]) loadShelf(d); });
+  }
   function renderHome() {
-    var kk = F.tmdbKeyOf(); if (ui.cat.forKey !== kk) { ui.cat.forKey = kk; ui.cat.data = {}; ui.cat.error = null; ui.cat.loading = false; ui.cat.token++; }
+    var kk = F.tmdbKeyOf(); if (ui.cat.forKey !== kk) { ui.cat.forKey = kk; ui.cat.sh = {}; ui.cat.token++; }
     var h = '<div class="page-h"><h1 class="logo"><i></i>Kinoman</h1></div>';
-    h += adviceHtml();
+    h += adviceHtml() + newsHtml();
     h += shelfHtml('Дивлюсь зараз', F.list('watching').slice(0, 12), 'watching');
+    h += soonHtml();
     h += F.colList().map(function (c) { return plainShelf(c.name, F.colItems(c.id)); }).join('');
-    h += '<div class="seg cat-seg" role="group" aria-label="Каталог">' + [['movie', 'Фільми'], ['tv', 'Серіали']].map(function (t) { return '<button type="button" data-act="hometype" data-mt="' + t[0] + '" aria-pressed="' + (ui.homeMt === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
-    var mt = ui.homeMt, d = ui.cat.data[mt];
-    if (F.tmdbKeyOf()) h += '<div class="chips" role="group" aria-label="Жанри"><button class="chip' + (!ui.homeGenre ? ' on' : '') + '" data-act="hgenre" data-g="">Усе</button>' + GENRES.map(function (g) { return '<button class="chip' + (ui.homeGenre === g[0] ? ' on' : '') + '" data-act="hgenre" data-g="' + g[0] + '">' + g[1] + '</button>'; }).join('') + '</div>';
-    if (F.tmdbKeyOf() && ui.homeGenre) {
+    var mt = ui.homeMt, toon = mt === 'toon';
+    h += '<div class="seg cat-seg" role="group" aria-label="Каталог">' + F.CATS.map(function (t) { return '<button type="button" data-act="hometype" data-mt="' + t[0] + '" aria-pressed="' + (mt === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
+    if (!F.tmdbKeyOf()) return h + '<div class="notice">' + ic('film') + '<div><b>Каталог потребує ключ TMDB</b><div class="sub">З ним тут з’являться добірки: що в тренді, що йде в кіно, топи за жанрами й десятиліттями. Ключ безкоштовний, його вставляють у розділі «Ще».</div><p style="margin:10px 0 0"><button class="btn sm" data-act="tab" data-tab="more">Додати ключ</button></p></div></div>';
+    if (!toon) h += '<div class="chips" role="group" aria-label="Жанри"><button class="chip' + (!ui.homeGenre ? ' on' : '') + '" data-act="hgenre" data-g="">Усе</button>' + GENRES.filter(function (g) { return g[0] !== '16' && g[0] !== 'anime'; }).map(function (g) { return '<button class="chip' + (ui.homeGenre === g[0] ? ' on' : '') + '" data-act="hgenre" data-g="' + g[0] + '">' + g[1] + '</button>'; }).join('') + '</div>';
+    if (!toon && ui.homeGenre) {
       var gk = 'h:' + mt + ':' + ui.homeGenre, go = discOpts(mt, ui.homeGenre, '', '');
-      h += discGrid(disc(gk, function () { return F.discover(mt, go); }));
-    } else if (!F.tmdbKeyOf()) {
-      h += '<div class="notice">' + ic('film') + '<div><b>Каталог потребує ключ TMDB</b><div class="sub">З ним тут з’являться добірки: що в тренді, що йде в кіно, найвище оцінені. Ключ безкоштовний, його вставляють у розділі «Ще».</div><p style="margin:10px 0 0"><button class="btn sm" data-act="tab" data-tab="more">Додати ключ TMDB</button></p></div></div>';
-    } else if (d) {
-      var names = [['trending', 'У тренді цього тижня'], ['now', mt === 'tv' ? 'Виходять зараз' : 'Зараз у кінотеатрах'], ['top', 'Найвище оцінені'], ['popular', 'Популярні']];
-      h += names.map(function (n) { return catShelf(n[1], d[n[0]]); }).join('');
-      if (!names.some(function (n) { return d[n[0]] && d[n[0]].length; })) h += emptyHtml('film', 'Каталог порожній', 'TMDB не повернув жодного фільму. Спробуйте пізніше.');
-    } else if (ui.cat.error) {
-      h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(ui.cat.error)) + '<p style="margin:10px 0 0"><button class="btn sm" data-act="retrycat">Спробувати ще раз</button></p></div></div>';
-    } else h += '<div class="spin" role="status" aria-label="Завантажуємо каталог"></div>';
+      return h + discGrid(disc(gk, function (pg) { return F.discover(mt, go, pg); }));
+    }
+    ensureShelves();
+    var defs = F.collDefs(mt), n = ui.cat.shown[mt], body = defs.slice(0, n).map(shelfSection).join('');
+    h += body;
+    var states = defs.slice(0, n).map(shelfState).filter(Boolean);
+    if (states.length && states.every(function (x) { return !x.loading && !x.error && !x.items.length; })) h += emptyHtml('film', 'Каталог порожній', 'TMDB не повернув жодного фільму. Спробуйте пізніше.');
+    if (n < defs.length) h += '<p class="morewrap"><button class="btn ghost" data-act="moreshelves">Більше добірок</button></p>';
     return h;
   }
-  async function loadCat() {
-    var mt = ui.homeMt, c = ui.cat; if (c.loading || c.data[mt] || c.error || !F.tmdbKeyOf()) return;
-    var tok = ++c.token; c.loading = true;
-    try {
-      var kinds = ['trending', 'now', 'top', 'popular'], res = await Promise.all(kinds.map(function (k) { return F.catalog(k, mt); })), o = {};
-      kinds.forEach(function (k, i) { o[k] = res[i]; });
-      if (tok !== c.token) return; c.data[mt] = o;
-    } catch (e) { if (tok !== c.token) return; c.error = e; }
-    c.loading = false; if (ui.tab === 'home') render();
+  // ---------- Уся добірка ----------
+  function collHtml(sh) {
+    var c = sh.coll;
+    var h = '<div class="sheetbar">' + (ui.stack.length ? '<button class="back" data-act="back" aria-label="Назад">' + ic('left') + '</button>' : '') + '<button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button></div><div class="coll"><h3>' + esc(c.title) + '</h3><p class="sub">' + c.items.length + ' ' + plural(c.items.length, 'фільм і серіал', 'фільми й серіали', 'фільмів і серіалів') + '</p>';
+    h += '<div class="tgrid">' + c.items.map(catTile).join('') + '</div>';
+    if (c.error) h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(c.error)) + '</div></div>';
+    if (c.busy) h += '<div class="spin" role="status" aria-label="Завантажуємо"></div>';
+    else if (c.more) h += '<p class="morewrap"><button class="btn ghost sm" data-act="collmore">Показати ще</button></p>';
+    return h + '</div>';
+  }
+  function openColl(id) {
+    var def = F.collDefs('movie').concat(F.collDefs('tv'), F.collDefs('toon')).filter(function (d) { return d.id === id; })[0], st = ui.cat.sh[id]; if (!def || !st || !st.items) return;
+    ui.sheet = { coll: { id: id, title: def.title, items: st.items.slice(), page: 1, more: st.more, busy: false, error: null } }; ui.stack = []; renderSheet();
+  }
+  async function collMore() {
+    var sh = ui.sheet, c = sh && sh.coll; if (!c || c.busy || !c.more) return; c.busy = true; c.error = null; renderSheet();
+    try { var r = await F.collection(c.id, c.page + 1); c.page++; var seen = {}; c.items.forEach(function (x) { seen[x.mt + x.tid] = 1; }); r.items.forEach(function (x) { if (!seen[x.mt + x.tid]) c.items.push(x); }); c.more = r.more; }
+    catch (e) { c.error = e; }
+    c.busy = false; if (ui.sheet === sh) renderSheet();
   }
   // ---------- Підказки під час набору ----------
   var suggTimer = null, suggTok = 0;
@@ -170,7 +227,7 @@
     var h = '<section class="filters"><h2>Підбір за фільтрами</h2><p class="sub" style="margin:0 0 10px">' + (f.mt === 'tv' ? 'Серіали' : 'Фільми') + ' за жанром, роками й рейтингом. Тип перемикається вище.</p>';
     h += '<div class="fgrid">' + sel('genre', [['', 'Усі жанри']].concat(GENRES), f.genre, 'Жанр') + sel('decade', DECADES, f.decade, 'Роки') + sel('vote', VOTES, f.vote, 'Рейтинг') + '</div></section>';
     var key = 'f:' + [f.mt, f.genre, f.decade, f.vote].join(':'), o = discOpts(f.mt, f.genre, f.decade, f.vote), mt = f.mt;
-    return h + discGrid(disc(key, function () { return F.discover(mt, o); }));
+    return h + discGrid(disc(key, function (pg) { return F.discover(mt, o, pg); }));
   }
   function renderSearch() {
     var h = '<div class="page-h"><h1>Пошук</h1></div>';
@@ -222,18 +279,18 @@
   function renderList(status) {
     var f = ui.lists[status], all = F.list(status), items = F.list(status, f);
     var avg = status === 'seen' ? F.stats().avgMine : null;
-    var h = '<div class="page-h big"><div><h1>' + NAMES[status] + '</h1><p class="sub">' + all.length + ' ' + (status !== 'seen' ? plural(all.length, 'позиція', 'позиції', 'позицій') : plural(all.length, 'фільм і серіал', 'фільми й серіали', 'фільмів і серіалів')) + (avg != null ? ', середня оцінка ' + avg.toFixed(1) : '') + '</p></div>' + (status === 'want' && all.length > 1 ? '<button class="btn soft sm" data-act="random">' + ic('shuffle', 'sm') + 'Що подивитись?</button>' : '') + '</div>';
+    var h = '<div class="page-h big"><div><h1>' + NAMES[status] + '</h1><p class="sub">' + all.length + ' ' + (status !== 'seen' ? plural(all.length, 'позиція', 'позиції', 'позицій') : plural(all.length, 'фільм і серіал', 'фільми й серіали', 'фільмів і серіалів')) + (avg != null ? ', середня оцінка ' + avg.toFixed(1) : '') + '</p></div>' + (status === 'want' && all.length > 1 ? '<span class="hbtns"><button class="btn soft sm" data-act="duo">' + ic('heart', 'sm') + 'Вдвох</button><button class="btn soft sm" data-act="random">' + ic('shuffle', 'sm') + 'Що подивитись?</button></span>' : '') + '</div>';
     if (!all.length) {
       return h + (status === 'want' ? emptyHtml('heart', 'Тут буде ваш список', 'Знайдіть фільм і натисніть «В обране», щоб не забути його.', '<p><button class="btn" data-act="tab" data-tab="search">Знайти фільм</button></p>')
         : status === 'watching' ? emptyHtml('play', 'Зараз нічого не дивитесь', 'Натисніть «Дивлюсь» у картці фільму чи серіалу. Для серіалів тут буде видно, скільки серій вже позаду.', '<p><button class="btn" data-act="tab" data-tab="search">Знайти фільм</button></p>')
         : emptyHtml('eye', 'Поки нічого не переглянуто', 'Позначайте фільми як переглянуті й ставте свої оцінки від 1 до 10.', '<p><button class="btn" data-act="tab" data-tab="search">Знайти фільм</button></p>'));
     }
     h += '<div class="seg" role="group" aria-label="Тип">' + [['', 'Усе'], ['movie', 'Фільми'], ['series', 'Серіали']].map(function (t) { return '<button type="button" data-act="ltype" data-type="' + t[0] + '" aria-pressed="' + (f.type === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
-    h += '<div class="tools"><select data-change="sort" aria-label="Сортування">' + Object.keys(F.SORTS).map(function (k) { return '<option value="' + k + '"' + (f.sort === k ? ' selected' : '') + '>' + esc(F.SORTS[k]) + '</option>'; }).join('') + '</select></div>';
+    h += '<div class="tools"><select data-change="time" aria-label="Час">' + [['', 'Будь-який час'], ['90', 'До 90 хв'], ['120', '90 хв – 2 год'], ['121', 'Понад 2 год']].map(function (o) { return '<option value="' + o[0] + '"' + ((f.time || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select><select data-change="sort" aria-label="Сортування">' + Object.keys(F.SORTS).map(function (k) { return '<option value="' + k + '"' + (f.sort === k ? ' selected' : '') + '>' + esc(F.SORTS[k]) + '</option>'; }).join('') + '</select></div>';
     var gs = F.genres(status);
     if (gs.length > 1) h += '<div class="chips" role="group" aria-label="Жанри"><button class="chip' + (!f.genre ? ' on' : '') + '" data-act="genre" data-genre="">Усі жанри</button>' + gs.slice(0, 14).map(function (g) { return '<button class="chip' + (f.genre === g.name ? ' on' : '') + '" data-act="genre" data-genre="' + esc(g.name) + '">' + esc(F.genreUk(g.name)) + ' ' + g.count + '</button>'; }).join('') + '</div>';
-    if (!items.length) return h + emptyHtml('film', 'За цим фільтром порожньо', 'Змініть тип чи жанр.');
-    return h + '<div class="' + (status === 'seen' ? 'stubs' : 'grid') + '">' + items.map(function (it, i) { return cardHtml(it, i, status); }).join('') + '</div>';
+    if (!items.length) return h + emptyHtml('film', 'За цим фільтром порожньо', 'Змініть тип, жанр чи час.');
+    return h + '<div class="' + (status === 'seen' ? 'stubs' : 'grid') + '">' + items.map(function (it, i) { var c = cardHtml(it, i, status); return status === 'watching' ? '<div class="cardwrap">' + c + '<button class="fin" data-act="finish" data-id="' + it.id + '" aria-label="Завершив: ' + esc(it.titleUk || it.title) + '">' + ic('check', 'sm') + 'Завершив</button></div>' : c; }).join('') + '</div>';
   }
 
   // ---------- Ще ----------
@@ -309,7 +366,7 @@
     if (ui.gemMsg) h += '<p class="' + (ui.gemMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.gemMsg.text) + '</p>';
     h += '<p class="fine">Ключ зберігається лише в цьому телефоні й не потрапляє в копію даних. До Google надсилається тільки назва, яку ви шукаєте, та опис фільму для перекладу. Це безкоштовно в межах ліміту Google.</p></section>';
     h += '<section class="panel"><h2>Ваша статистика</h2><div class="stats"><div class="stat"><div class="v">' + s.seen + '</div><div class="n">переглянуто</div></div><div class="stat"><div class="v">' + s.want + '</div><div class="n">в обраному</div></div><div class="stat"><div class="v">' + (s.avgMine == null ? '—' : s.avgMine.toFixed(1)) + '</div><div class="n">середня оцінка</div></div><div class="stat"><div class="v">' + (s.minutes ? esc(F.fmtMinutes(s.minutes)) : '—') + '</div><div class="n">часу за екраном</div></div></div>' + (s.topGenres.length ? '<p class="sub">Найчастіше: ' + s.topGenres.map(function (g) { return esc(F.genreUk(g.name)); }).join(', ') + '</p>' : '') + '</section>';
-    h += yearPanel() + colPanel() + syncPanel();
+    h += yearPanel() + recordsPanel() + colPanel() + syncPanel();
     h += '<section class="panel"><h2>Копія даних</h2><p class="sub" style="margin:0 0 10px">Списки, оцінки й нотатки лежать тільки в цьому телефоні. Збережіть копію, щоб перенести їх на інший пристрій чи не втратити при очищенні браузера.</p><div class="actions" style="margin-top:0"><button class="btn ghost" data-act="export">' + ic('download', 'sm') + 'Зберегти копію</button><button class="btn ghost" data-act="import">' + ic('upload', 'sm') + 'Відновити</button></div><input type="file" id="import-file" accept="application/json,.json" class="hide">';
     if (ui.backupMsg) h += '<p class="' + (ui.backupMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.backupMsg.text) + '</p>';
     if (F.isSaveFailed()) h += '<p class="er-t">Телефон не дає зберегти дані. Звільніть місце або вимкніть приватний режим.</p>';
@@ -351,7 +408,7 @@
     var t = sh.tr || {}; return { titleUk: t.titleUk || (ex && ex.titleUk) || '', plotUk: t.plotUk || (ex && ex.plotUk) || '' };
   }
   function initials(n) { return String(n).split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0); }).join('').toUpperCase(); }
-  function exOf(sh, lib) { return lib && lib.xv >= 2 ? lib : (sh.extras && sh.extras.data) || lib || {}; }
+  function exOf(sh, lib) { return lib && lib.xv >= 3 ? lib : (sh.extras && sh.extras.data) || lib || {}; }
   function gsearch(site, q) { return 'https://www.google.com/search?q=' + encodeURIComponent('site:' + site + ' ' + q); }
   function watchRow(sh, lib, it, tr) {
     var x = exOf(sh, lib), name = tr.titleUk || it.title;
@@ -395,8 +452,9 @@
     catch (e) { if (ui.sheet === sh) { sh.perr = e; renderSheet(); } }
   }
   function pushCurrent() {
-    var cur = ui.sheet; if (!cur || cur.wheel) return;
-    if (cur.person) ui.stack.push({ person: cur.person });
+    var cur = ui.sheet; if (!cur || cur.wheel || cur.duo) return;
+    if (cur.coll) ui.stack.push({ coll: cur.coll });
+    else if (cur.person) ui.stack.push({ person: cur.person });
     else ui.stack.push({ id: cur.id, brief: cur.brief || (cur.item ? F.brief(cur.item) : null) });
   }
   // ---------- Колесо «Що дивимось?» ----------
@@ -414,6 +472,85 @@
     else h += '<div class="wres"><button class="btn" data-act="spin"' + (w.spinning ? ' disabled' : '') + '>' + (w.spinning ? 'Крутиться…' : 'Крутити') + '</button></div>';
     return h + '</div>';
   }
+  // ---------- Вечір удвох ----------
+  function duoHtml() {
+    var d = ui.duo, gs = F.genres('want').slice(0, 12);
+    var h = '<div class="sheetbar"><button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button></div><div class="duo"><h3>Вечір удвох</h3><p class="sub">Кожен обирає, що любить. Підберемо з ваших «Обраних» те, що підійде обом.</p>';
+    ['a', 'b'].forEach(function (w, n) {
+      h += '<h4>Хто ' + (n + 1) + '-й: жанри <span class="sub">(можна пропустити)</span></h4><div class="chips" role="group" aria-label="Жанри ' + (n + 1) + '-го">' + gs.map(function (g) { return '<button class="chip' + (d[w].indexOf(g.name) >= 0 ? ' on' : '') + '" data-act="duog" data-who="' + w + '" data-g="' + esc(g.name) + '" aria-pressed="' + (d[w].indexOf(g.name) >= 0) + '">' + esc(F.genreUk(g.name)) + '</button>'; }).join('') + '</div>';
+    });
+    h += '<h4>Скільки є часу</h4><div class="chips" role="group" aria-label="Час">' + [[0, 'Не важливо'], [100, 'До 100 хв'], [130, 'До 130 хв']].map(function (o) { return '<button class="chip' + (d.max === o[0] ? ' on' : '') + '" data-act="duom" data-v="' + o[0] + '" aria-pressed="' + (d.max === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>';
+    h += '<h4>Що саме</h4><div class="chips" role="group" aria-label="Тип">' + [['', 'Усе'], ['movie', 'Фільм'], ['series', 'Серіал']].map(function (o) { return '<button class="chip' + (d.type === o[0] ? ' on' : '') + '" data-act="duot" data-v="' + o[0] + '" aria-pressed="' + (d.type === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>';
+    var res = F.duoPick(d.a, d.b, d.max, d.type);
+    h += '<h4>Підійде</h4>';
+    if (!res.length) return h + '<div class="notice">' + ic('film') + '<div>Нічого не підійшло. Спробуйте прибрати жанр чи обмеження за часом.</div></div></div>';
+    return h + '<div class="duores">' + res.map(function (r) {
+      return '<button class="duorow" data-act="open" data-id="' + r.item.id + '"><span class="poster"><span class="ph">' + esc(r.item.title) + '</span>' + (r.item.poster ? '<img src="' + esc(r.item.poster) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') + '</span><span class="nt"><b>' + esc(r.item.titleUk || r.item.title) + '</b><span>' + (r.both ? 'Підходить обом' : 'Підходить одному') + (r.item.runtime ? ', ' + esc(F.fmtMinutes(r.item.runtime)) : '') + '</span></span></button>';
+    }).join('') + '</div></div>';
+  }
+  function openDuo() { ui.duo = { a: [], b: [], max: 0, type: '' }; ui.sheet = { duo: true }; ui.stack = []; renderSheet(); }
+
+  // ---------- Картинка для поширення ----------
+  function loadImg(src) {
+    return new Promise(function (res) {
+      if (!src || !/^https:\/\//.test(src)) return res(null);
+      var im = new Image(), done = false, fin = function (v) { if (!done) { done = true; res(v); } };
+      im.crossOrigin = 'anonymous'; im.onload = function () { fin(im); }; im.onerror = function () { fin(null); };
+      setTimeout(function () { fin(null); }, 6000); im.src = src;
+    });
+  }
+  async function shareFilmImage(id) {
+    var it = F.getItem(id); if (!it) return;
+    try { if (document.fonts && document.fonts.load) await Promise.all([document.fonts.load('800 80px Unbounded'), document.fonts.load('600 40px Onest')]); } catch (e) { /* стандартний шрифт */ }
+    var im = await loadImg(it.poster);
+    var c = document.createElement('canvas'); c.width = 1080; c.height = 1350; var g = c.getContext('2d'); if (!g) { toast('Телефон не дав створити картинку.'); return; }
+    var hu = hue(it.id), bg = g.createLinearGradient(0, 0, 1080, 1350); bg.addColorStop(0, 'hsl(' + hu + ' 55% 18%)'); bg.addColorStop(1, '#0C0A12'); g.fillStyle = bg; g.fillRect(0, 0, 1080, 1350);
+    var D = '"Unbounded", "Onest", system-ui, sans-serif', B = '"Onest", system-ui, sans-serif', name = it.titleUk || it.title;
+    var px = 80, py = 80, pw = 480, ph = 720;
+    g.save(); g.beginPath(); if (g.roundRect) g.roundRect(px, py, pw, ph, 28); else g.rect(px, py, pw, ph); g.clip();
+    if (im) { var sc = Math.max(pw / im.width, ph / im.height), w = im.width * sc, h2 = im.height * sc; g.drawImage(im, px + (pw - w) / 2, py + (ph - h2) / 2, w, h2); }
+    else { g.fillStyle = 'hsl(' + hu + ' 50% 28%)'; g.fillRect(px, py, pw, ph); g.fillStyle = '#F3EEF6'; g.font = '800 48px ' + D; wrapText(g, name, px + 30, py + 300, pw - 60, 58, 4); }
+    g.restore();
+    var x = 620, y = 150;
+    g.fillStyle = '#F5C518'; g.font = '900 120px ' + D; g.fillText(it.ratings.imdb != null ? it.ratings.imdb.toFixed(1) : '—', x, y + 80); g.fillStyle = '#9D95AE'; g.font = '600 32px ' + B; g.fillText('IMDb', x, y + 130);
+    if (it.myRating) { g.fillStyle = '#FF4F8B'; g.font = '900 120px ' + D; g.fillText(String(it.myRating), x, y + 330); g.fillStyle = '#9D95AE'; g.font = '600 32px ' + B; g.fillText('моя оцінка з 10', x, y + 380); }
+    if (it.ratings.rt != null) { g.fillStyle = '#F3EEF6'; g.font = '800 54px ' + D; g.fillText(it.ratings.rt + '%', x, y + (it.myRating ? 500 : 330)); g.fillStyle = '#9D95AE'; g.font = '600 32px ' + B; g.fillText('Rotten Tomatoes', x, y + (it.myRating ? 548 : 378)); }
+    g.fillStyle = '#F3EEF6'; g.font = '800 64px ' + D; var ny = wrapText(g, name, 80, 930, 920, 76, 3);
+    g.fillStyle = '#9D95AE'; g.font = '600 36px ' + B; g.fillText([String(it.year || '').slice(0, 4), it.genre.slice(0, 3).map(F.genreUk).join(', ')].filter(Boolean).join('  |  '), 80, ny + 20);
+    if (it.note) { g.fillStyle = '#F3EEF6'; g.font = 'italic 600 38px ' + B; wrapText(g, '«' + it.note.replace(/\s+/g, ' ').slice(0, 140) + (it.note.length > 140 ? '…' : '') + '»', 80, ny + 90, 920, 52, 3); }
+    g.fillStyle = '#FF4F8B'; g.beginPath(); g.arc(92, 1262, 12, 0, 7); g.fill(); g.fillStyle = '#F3EEF6'; g.font = '800 40px ' + D; g.fillText('Kinoman', 120, 1276);
+    c.toBlob(async function (blob) {
+      if (!blob) { toast('Не вдалося зберегти картинку.'); return; }
+      var fn = 'kinoman-' + it.id + '.png', file = null; try { file = new File([blob], fn, { type: 'image/png' }); } catch (e) { /* старий браузер */ }
+      try { if (file && navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+      var url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = fn; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      toast(im ? 'Картинку збережено' : 'Картинку збережено без постера');
+    }, 'image/png');
+  }
+  function wrapText(g, text, x, y, maxW, lh, maxLines) {
+    var words = String(text).split(/\s+/), line = '', n = 0;
+    for (var i = 0; i < words.length; i++) {
+      var t = line ? line + ' ' + words[i] : words[i];
+      if (g.measureText(t).width > maxW && line) { if (++n >= maxLines) { line += '…'; break; } g.fillText(line, x, y); y += lh; line = words[i]; } else line = t;
+    }
+    g.fillText(line, x, y); return y + lh;
+  }
+  function recordsPanel() {
+    var r = F.records(); var h = '<section class="panel"><h2>Мої рекорди</h2>';
+    if (!r.length) return h + '<p class="sub">Тут з’являться ваші рекорди: найдовший серіал, найвища оцінка та інше. Позначайте переглянуте й ставте оцінки.</p></section>';
+    return h + '<div class="recs">' + r.map(function (x) { return '<div class="rec-row"><span class="sub">' + esc(x.k) + '</span><b>' + esc(x.v) + '</b><span>' + esc(x.n) + '</span></div>'; }).join('') + '</div></section>';
+  }
+  // Постери наперед, щоб вони були й без інтернету (кеш робить сервіс-воркер)
+  function warmPosters() {
+    if (!window.caches) return;
+    var urls = []; F.list('want').concat(F.list('watching'), F.list('seen')).forEach(function (it) { if (it.poster && /^https:\/\//.test(it.poster) && urls.indexOf(it.poster) < 0) urls.push(it.poster); });
+    urls = urls.slice(0, 60); var i = 0;
+    (function next() {
+      if (i >= urls.length) return; var u = urls[i++];
+      caches.match(u).then(function (hit) { if (hit) return; return new Promise(function (r) { var im = new Image(); im.onload = im.onerror = function () { r(); }; im.referrerPolicy = 'no-referrer'; im.src = u; setTimeout(r, 4000); }); }).then(function () { setTimeout(next, 150); }, function () { setTimeout(next, 150); });
+    })();
+  }
+
   function openWheel() {
     var all = F.list('want', ui.lists.want).slice(); for (var i = all.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = all[i]; all[i] = all[j]; all[j] = t; }
     ui.sheet = { wheel: { items: all.slice(0, 10), from: 0, spinning: false, pick: null } }; ui.stack = []; renderSheet();
@@ -450,6 +587,8 @@
     var sh = ui.sheet;
     if (sh.person) return personHtml(sh);
     if (sh.wheel) return wheelHtml(sh);
+    if (sh.duo) return duoHtml();
+    if (sh.coll) return collHtml(sh);
     var lib = F.getItem(sh.id), it = lib || sh.item;
     var hdr = '<div class="sheetbar">' + (ui.stack.length ? '<button class="back" data-act="back" aria-label="Назад">' + ic('left') + '</button>' : '') + '<button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button></div>';
     if (!it) {
@@ -489,6 +628,7 @@
     h += seasonBlock(sh, it, lib);
     h += recsBlock(sh, lib);
     h += '<div class="actions"><a class="btn ghost sm" href="https://www.imdb.com/title/' + esc(it.id) + '/" target="_blank" rel="noopener">' + ic('link', 'sm') + 'Відкрити в IMDb</a>';
+    if (lib) h += '<button class="btn ghost sm" data-act="shareimg" data-id="' + esc(lib.id) + '">' + ic('download', 'sm') + 'Поділитись' + '</button>';
     if (lib) h += '<button class="btn ghost sm" data-act="refresh"' + (sh.refreshing ? ' disabled' : '') + '>' + ic('refresh', 'sm') + (sh.refreshing ? 'Оновлюємо…' : 'Оновити рейтинги') + '</button><button class="btn danger sm" data-act="remove">' + ic('trash', 'sm') + 'Видалити зі списків</button>';
     h += '</div>';
     if (sh.error) h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(sh.error)) + '</div></div>';
@@ -499,7 +639,7 @@
     syncExtras();
     if (!ui.sheet) { sheetRoot.innerHTML = ''; document.body.style.overflow = ''; return; }
     var old = $('.sheet', sheetRoot), top = old ? old.scrollTop : 0, again = !!old;
-    sheetRoot.innerHTML = '<div class="scrim' + (again ? ' static' : '') + '" data-act="scrim"><div class="sheet' + (ui.sheet.wheel ? ' wheel-sheet' : '') + '" role="dialog" aria-modal="true" aria-label="' + esc(ui.sheet.person ? ui.sheet.person.name : ui.sheet.wheel ? 'Колесо' : (ui.sheet.item || ui.sheet.brief || {}).title || 'Картка') + '">' + sheetHtml() + '</div></div>';
+    sheetRoot.innerHTML = '<div class="scrim' + (again ? ' static' : '') + '" data-act="scrim"><div class="sheet' + (ui.sheet.wheel ? ' wheel-sheet' : '') + '" role="dialog" aria-modal="true" aria-label="' + esc(ui.sheet.person ? ui.sheet.person.name : ui.sheet.wheel ? 'Колесо' : ui.sheet.duo ? 'Вечір удвох' : ui.sheet.coll ? ui.sheet.coll.title : (ui.sheet.item || ui.sheet.brief || {}).title || 'Картка') + '">' + sheetHtml() + '</div></div>';
     var n = $('.sheet', sheetRoot); if (n && top) n.scrollTop = top;
     document.body.style.overflow = 'hidden';
   }
@@ -519,7 +659,7 @@
   async function loadExtras(force) {
     var sh = ui.sheet; if (!sh || !F.tmdbKeyOf()) return; var it = sheetItem(); if (!it) return;
     var lib = F.getItem(it.id);
-    var fresh = lib && lib.xv >= 2 && (lib.type !== 'series' || FB.now() - lib.exAt < 86400000);
+    var fresh = lib && lib.xv >= 3 && (lib.type !== 'series' || FB.now() - lib.exAt < 86400000);
     if (!force && (fresh || (sh.extras && (sh.extras.data || sh.extras.loading || sh.extras.error)))) return;
     sh.extras = { loading: true, error: null, data: null }; renderSheet();
     try {
@@ -532,7 +672,7 @@
   }
   function syncExtras() {
     var sh = ui.sheet; if (!sh || !sh.extras || !sh.extras.data) return;
-    var lib = F.getItem(sh.id); if (lib && !(lib.xv >= 2)) F.setExtras(sh.id, sh.extras.data);
+    var lib = F.getItem(sh.id); if (lib && !(lib.xv >= 3)) F.setExtras(sh.id, sh.extras.data);
   }
   function sheetItem() { var sh = ui.sheet; return sh ? (sh.item || F.getItem(sh.id)) : null; }
   // Відмічена серія в «Обраних» означає, що серіал уже дивляться
@@ -554,7 +694,6 @@
     app.innerHTML = st === 'home' ? renderHome() : st === 'search' ? renderSearch() : st === 'more' ? renderMore() : renderList(st);
     tabsEl.innerHTML = TABS.map(function (t) { return '<button data-act="tab" data-tab="' + t[0] + '" aria-label="' + t[1] + '"' + (st === t[0] ? ' aria-current="page"' : '') + '>' + ic(t[2]) + '<span>' + t[1] + '</span>' + '</button>'; }).join('');
     if (ui.sheet) renderSheet();
-    if (st === 'home') loadCat();
   }
   function setTab(t) { ui.tab = t; ui.enter = true; ui.keyMsg = null; ui.backupMsg = null; ui.gemMsg = null; ui.tmdbMsg = null; render(); window.scrollTo(0, 0); }
 
@@ -563,8 +702,12 @@
     var a = el.dataset.act, id = el.dataset.id;
     switch (a) {
       case 'tab': setTab(el.dataset.tab); break;
-      case 'hometype': ui.homeMt = el.dataset.mt === 'tv' ? 'tv' : 'movie'; ui.cat.error = null; ui.enter = true; render(); break;
-      case 'retrycat': ui.cat.error = null; render(); break;
+      case 'hometype': ui.homeMt = el.dataset.mt === 'tv' ? 'tv' : el.dataset.mt === 'toon' ? 'toon' : 'movie'; ui.enter = true; render(); break;
+      case 'moreshelves': ui.cat.shown[ui.homeMt] += 5; render(); break;
+      case 'reshelf': { var rs = F.collDefs(ui.homeMt).filter(function (d) { return d.id === el.dataset.id; })[0]; if (rs) { delete ui.cat.sh[rs.id]; loadShelf(rs); paintShelf(rs); } break; }
+      case 'coll': openColl(el.dataset.id); break;
+      case 'collmore': collMore(); break;
+      case 'discmore': discMore(el.dataset.key); break;
       case 'cat': {
         hideSugg(); var qb = $('#q'); if (qb && document.activeElement === qb) qb.blur();
         var ck = 'cat' + el.dataset.tid; if (ui.busy[ck]) return; ui.busy[ck] = true; toast('Відкриваємо…');
@@ -606,7 +749,7 @@
       case 'rehero': { var cur0 = ui.heroId, tries = 0, nx; do { nx = F.randomPick('want'); } while (nx && nx.id === cur0 && F.list('want').length > 1 && ++tries < 20); if (nx) ui.heroId = nx.id; render(); break; }
       case 'sheet-more': closeSheet(); setTab('more'); break;
       case 'extras': loadExtras(true); break;
-      case 'back': { var prev = ui.stack.pop(); if (prev && prev.person) openPerson(prev.person); else if (prev) openSheet(prev.id, prev.brief); break; }
+      case 'back': { var prev = ui.stack.pop(); if (prev && prev.coll) { ui.sheet = { coll: prev.coll }; renderSheet(); } else if (prev && prev.person) openPerson(prev.person); else if (prev) openSheet(prev.id, prev.brief); break; }
       case 'person': pushCurrent(); openPerson({ id: Number(el.dataset.pid), name: el.dataset.name, photo: el.dataset.photo }); break;
       case 'reperson': if (ui.sheet && ui.sheet.person) openPerson(ui.sheet.person); break;
       case 'allknown': if (ui.sheet) { ui.sheet.allKnown = !ui.sheet.allKnown; renderSheet(); } break;
@@ -634,6 +777,16 @@
       case 'rencol': { var cur1 = F.colList().filter(function (c) { return c.id === el.dataset.c; })[0]; if (!cur1) return; var nn = window.prompt('Нова назва добірки', cur1.name); if (nn && nn.trim()) F.renameCol(cur1.id, nn); render(); break; }
       case 'delcol': { var cur2 = F.colList().filter(function (c) { return c.id === el.dataset.c; })[0]; if (!cur2) return; if (window.confirm('Видалити добірку «' + cur2.name + '»? Фільми лишаться у ваших списках.')) F.removeCol(cur2.id); render(); break; }
       case 'spin': spinWheel(); break;
+      case 'shareimg': shareFilmImage(el.dataset.id); break;
+      case 'duo': openDuo(); break;
+      case 'duog': { var w = el.dataset.who === 'b' ? 'b' : 'a', ix = ui.duo[w].indexOf(el.dataset.g); if (ix >= 0) ui.duo[w].splice(ix, 1); else ui.duo[w].push(el.dataset.g); renderSheet(); break; }
+      case 'duom': ui.duo.max = Number(el.dataset.v) || 0; renderSheet(); break;
+      case 'duot': ui.duo.type = el.dataset.v; renderSheet(); break;
+      case 'markep': F.markEpisodeSeen(el.dataset.id, Number(el.dataset.s), Number(el.dataset.e)); toast('Серію відмічено'); break;
+      case 'finish': {
+        var fi = F.getItem(el.dataset.id); if (!fi) break;
+        F.setStatus(fi, 'seen'); openSheet(fi.id); if (ui.sheet) { ui.sheet.stamp = true; renderSheet(); } toast('Переглянуто. Поставте оцінку'); break;
+      }
       case 'yearimg': saveYearImage(Number(el.dataset.y)); break;
       case 'syncnow': {
         if (ui.syncBusy) return; ui.syncBusy = true; ui.syncMsg = { ok: true, text: 'Синхронізуємо…' }; render();
@@ -737,6 +890,7 @@
     // тиха синхронізація під час відкриття й коли додаток ховається
     var autoSync = function () { var so = F.syncOf(); if (!so.url || !so.code || ui.syncBusy || FB.now() - so.at < 30000) return; ui.syncBusy = true; F.syncNow().then(function () { ui.syncBusy = false; render(); }, function () { ui.syncBusy = false; }); };
     setTimeout(autoSync, 800);
+    setTimeout(function () { if (F.tmdbKeyOf()) F.refreshSeries(6).then(function (n) { if (n) render(); }, function () { /* без інтернету */ }); warmPosters(); }, 2500);
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') autoSync(); });
     document.addEventListener('click', function (e) {
       var el = e.target.closest('[data-act]');
@@ -748,6 +902,7 @@
     document.addEventListener('change', function (e) {
       var el = e.target;
       if (el.dataset && el.dataset.change === 'sort') { ui.lists[ui.tab].sort = el.value; render(); }
+      if (el.dataset && el.dataset.change === 'time') { ui.lists[ui.tab].time = el.value; render(); }
       if (el.dataset && el.dataset.change === 'fl' && /^(genre|decade|vote)$/.test(el.dataset.k)) { ui.fl[el.dataset.k] = el.value; render(); }
       if (el.id === 'import-file' && el.files && el.files[0]) {
         var rd = new FileReader();

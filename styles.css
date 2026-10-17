@@ -382,3 +382,46 @@ button.person[disabled]{cursor:default;opacity:1}
 .wres b{display:block;font:800 22px/1.2 var(--display);margin-bottom:14px}
 .wres .acts{display:flex;justify-content:center;gap:10px}
 @media (prefers-reduced-motion:reduce){.wheel svg{transition:none!important}}
+
+/* v11: нове, скоро, завершив, вдвох, рекорди */
+.news,.soon{margin:0 0 20px}
+.newrow{display:flex;align-items:center;gap:10px;padding:10px;border-radius:20px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);margin-bottom:8px}
+.nopen{display:flex;align-items:center;gap:12px;flex:1;min-width:0;text-align:left}
+.nopen .poster{width:46px;flex:none;border-radius:10px}
+.nopen .ph{font-size:8px;padding:3px}
+.nt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.nt b{font:800 15px/1.2 var(--display);letter-spacing:-.01em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.nt span{font-size:13px;color:var(--muted)}
+.nt .when{color:var(--accent);font-weight:700}
+.soonlist{display:flex;flex-direction:column;gap:6px}
+.soonrow{display:flex;align-items:center;gap:12px;padding:8px 12px 8px 8px;border-radius:18px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);text-align:left;width:100%}
+.sd{display:flex;flex-direction:column;align-items:center;justify-content:center;width:50px;height:50px;border-radius:14px;background:var(--accent-soft);color:var(--accent);flex:none}
+.sd b{font:800 20px/1 var(--display)}
+.sd span{font-size:11px;font-weight:700;margin-top:2px}
+.st{display:flex;flex-direction:column;min-width:0}
+.st b{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st span{font-size:13px;color:var(--muted)}
+.hbtns{display:flex;flex-direction:column;align-items:stretch;gap:8px}
+.cardwrap{display:flex;flex-direction:column;gap:8px;min-width:0}
+.fin{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;border-radius:19px;background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:14px;box-shadow:inset 0 0 0 1.5px var(--accent)}
+.fin:active{transform:scale(.97)}
+.duo{padding:56px 16px 8px}
+.duo h3{font:800 26px/1.1 var(--display);margin:0 0 4px}
+.duo h4{font-size:15px;font-weight:700;margin:18px 0 8px}
+.duo h4 .sub{font-weight:500}
+.duo .chips{flex-wrap:wrap;overflow:visible;padding:0;margin:0}
+.duores{display:flex;flex-direction:column;gap:8px}
+.duorow{display:flex;align-items:center;gap:12px;padding:8px;border-radius:18px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);text-align:left;width:100%}
+.duorow .poster{width:44px;flex:none;border-radius:10px}
+.duorow .ph{font-size:8px;padding:3px}
+.recs{display:flex;flex-direction:column;gap:8px}
+.rec-row{display:flex;flex-direction:column;gap:2px;padding:10px 14px;border-radius:16px;background:var(--raised);box-shadow:inset 0 0 0 1px var(--line)}
+.rec-row b{font:800 16px/1.2 var(--display);letter-spacing:-.01em}
+.rec-row span:last-child{color:var(--accent);font-weight:700;font-size:14px}
+
+/* v12: добірки каталогу, «Показати ще» */
+.morewrap{display:flex;justify-content:center;margin:18px 0 6px}
+.coll{padding:56px 16px 24px}
+.coll h3{font:800 24px/1.15 var(--display);margin:0 0 4px;letter-spacing:-.01em}
+.coll .tgrid{margin-top:14px}
+.shelf .spin{margin:22px auto}
