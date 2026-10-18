@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v25';
+  var VERSION = 'v26';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -653,11 +653,14 @@
   function setArch(id, on) { var it = S.items[id]; if (!it || it.arch === !!on) return; it.arch = !!on; it.updatedAt = stamp(it.updatedAt); save(); }
   function archived() { return Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { return it.arch; }).sort(function (a, b) { return b.updatedAt - a.updatedAt; }); }
   function yearNum(it) { var m = /\d{4}/.exec(it.year); return m ? Number(m[0]) : 0; }
+  function isToon(it) { return Array.isArray(it.genre) && it.genre.indexOf('Animation') >= 0; }
   function list(status, o) {
     o = o || {};
     var arr = Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { return it.status === status && (o.arch === true || !it.arch); });
     if (o.old) { var yAgo = FB.now() - 365 * 86400000; arr = arr.filter(function (it) { return it.addedAt > 0 && it.addedAt < yAgo; }); }
-    if (o.type === 'movie' || o.type === 'series') arr = arr.filter(function (it) { return it.type === o.type; });
+    // «Мультики» — усе з жанром Animation; «Фільми» й «Серіали» тоді без мультиків, як у каталозі
+    if (o.type === 'movie' || o.type === 'series') arr = arr.filter(function (it) { return it.type === o.type && !isToon(it); });
+    if (o.type === 'toon') arr = arr.filter(isToon);
     if (o.genre) arr = arr.filter(function (it) { return it.genre.indexOf(o.genre) >= 0; });
     if (o.time) arr = arr.filter(function (it) { var m = it.runtime; if (!m) return false; return o.time === '90' ? m <= 90 : o.time === '120' ? m > 90 && m <= 120 : m > 120; });
     var cmp = {
@@ -968,7 +971,7 @@
     collName: collName, tmdbCollection: tmdbCollection, searchMarathons: searchMarathons, aiMarathon: aiMarathon, saveMarathon: saveMarathon, removeMarathon: removeMarathon, marathons: marathons, marathonOf: marathonOf,
     setArch: setArch, archived: archived, oldCount: oldCount, SORTS_FOR: SORTS_FOR,
     backupNow: backupNow, backupDue: backupDue, autoBackup: autoBackup, listBackups: listBackups, restoreBackup: restoreBackup,
-    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, tmdbItem: tmdbItem, toonWest: toonWest, setToonWest: setToonWest, studios: studios, studioDef: studioDef, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
+    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, isToon: isToon, tmdbItem: tmdbItem, toonWest: toonWest, setToonWest: setToonWest, studios: studios, studioDef: studioDef, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
     getItem: getItem, setStatus: setStatus, setMyRating: setMyRating, setNote: setNote, removeItem: removeItem, restoreItem: restoreItem, refresh: refresh,
     toggleEpisode: toggleEpisode, setSeasonWatched: setSeasonWatched, seasonProgress: seasonProgress, watchedCount: watchedCount,
     list: list, genres: genres, randomPick: randomPick, stats: stats, fmtMinutes: fmtMinutes, SORTS: SORTS, brief: brief,
