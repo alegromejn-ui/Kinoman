@@ -1021,7 +1021,7 @@
       case 'togcol': { var lc = ui.sheet && F.getItem(ui.sheet.id); if (lc) { F.toggleCol(lc.id, el.dataset.c); renderSheet(); } break; }
       case 'newcol': {
         var nm = window.prompt('Назва добірки, наприклад «На вечір удвох»'); if (!nm || !nm.trim()) return;
-        var cid = F.addCol(nm); var lc2 = ui.sheet && F.getItem(ui.sheet.id); if (cid && lc2) F.toggleCol(lc2.id, cid); renderSheet(); render(); break;
+        var cid = F.addCol(nm); var lc2 = ui.sheet && F.getItem(ui.sheet.id); if (cid && lc2) F.toggleCol(lc2.id, cid); else if (!cid && lc2 && /^для\s*двох$/i.test(String(nm).trim()) && !lc2.two) F.toggleTwo(lc2.id); renderSheet(); render(); break;
       }
       case 'rencol': { var cur1 = F.colList().filter(function (c) { return c.id === el.dataset.c; })[0]; if (!cur1) return; var nn = window.prompt('Нова назва добірки', cur1.name); if (nn && nn.trim()) F.renameCol(cur1.id, nn); render(); break; }
       case 'delcol': { var cur2 = F.colList().filter(function (c) { return c.id === el.dataset.c; })[0]; if (!cur2) return; if (window.confirm('Видалити добірку «' + cur2.name + '»? Фільми лишаться у ваших списках.')) F.removeCol(cur2.id); render(); break; }

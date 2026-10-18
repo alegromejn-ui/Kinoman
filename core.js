@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v30';
+  var VERSION = 'v31';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -82,7 +82,17 @@
     try { localStorage.setItem(KEY, JSON.stringify(S)); saveFailed = false; } catch (e) { saveFailed = true; }
     if (!silent) emit();
   }
-  function init() { if (!S) load(); FB.state = S; }
+  // Власна добірка «Для двох» тепер вбудована: переносимо позначки й прибираємо дубль
+  function mergeTwoCol() {
+    var n = 0;
+    Object.keys(S.cols).forEach(function (cid) {
+      var c = S.cols[cid]; if (!c || c.del || !/^для\s*двох$/i.test(String(c.name).trim())) return;
+      Object.keys(S.items).forEach(function (k) { var it = S.items[k], i = it.cols.indexOf(cid); if (i >= 0) { it.cols.splice(i, 1); it.two = true; it.updatedAt = stamp(it.updatedAt); n++; } });
+      c.del = true; c.upd = stamp(c.upd);
+    });
+    return n;
+  }
+  function init() { if (!S) load(); var before = JSON.stringify(S.cols); mergeTwoCol(); if (JSON.stringify(S.cols) !== before) save(true); FB.state = S; }
 
 
   // ---------- Gemini (необов'язково): переклад пошуку й опису ----------
@@ -720,7 +730,7 @@
 
   // ---------- Добірки ----------
   function colList() { return Object.keys(S.cols).filter(function (k) { return !S.cols[k].del; }).map(function (k) { return { id: k, name: S.cols[k].name, at: S.cols[k].at }; }).sort(function (a, b) { return a.at - b.at; }); }
-  function addCol(name) { name = String(name || '').trim().slice(0, 40); if (!name) return null; var id = 'c' + FB.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); var t = FB.now(); S.cols[id] = { name: name, at: t, upd: t, del: false }; save(); return id; }
+  function addCol(name) { name = String(name || '').trim().slice(0, 40); if (!name || /^для\s*двох$/i.test(name)) return null; var id = 'c' + FB.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); var t = FB.now(); S.cols[id] = { name: name, at: t, upd: t, del: false }; save(); return id; }
   function renameCol(id, name) { name = String(name || '').trim().slice(0, 40); var c = S.cols[id]; if (!c || !name) return; c.name = name; c.upd = stamp(c.upd); save(); }
   function removeCol(id) { var c = S.cols[id]; if (!c) return; c.del = true; c.upd = stamp(c.upd); Object.keys(S.items).forEach(function (k) { var it = S.items[k], i = it.cols.indexOf(id); if (i >= 0) { it.cols.splice(i, 1); it.updatedAt = stamp(it.updatedAt); } }); save(); }
   function toggleTwo(itemId) { var it = S.items[itemId]; if (!it) return false; it.two = !it.two; it.updatedAt = stamp(it.updatedAt); save(); return it.two; }
@@ -960,6 +970,7 @@
       if (!ex) { S.items[n.id] = n; added++; } else if (n.updatedAt > ex.updatedAt) { S.items[n.id] = n; updated++; }
     });
     Object.keys(S.gone).forEach(function (k) { var ex = S.items[k]; if (ex && S.gone[k] >= ex.updatedAt) { delete S.items[k]; removed++; } });
+    mergeTwoCol();
     return { added: added, updated: updated, removed: removed };
   }
   async function syncCall(body) {
