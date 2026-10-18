@@ -502,3 +502,9 @@ button.qin:active{transform:scale(.9)}
 .archopen{flex:1;min-width:0;text-align:left;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .archopen i{font-style:normal;color:var(--muted);font-size:13px}
 .coll-h{margin:0 0 4px}
+/* v21: фільтр року в «Топ 100» */
+.yrbar{margin:4px 0 12px}
+.yrbar select{max-width:100%}
+/* v21: фільтр року в «Топ 100» */
+.yrbar{margin:4px 0 12px}
+.yrbar select{max-width:100%}

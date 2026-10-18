@@ -260,15 +260,35 @@
     if (c.mar) return marHtml(c);
     if (c.find) return marFindHtml(c);
     var h = '<div class="sheetbar">' + (ui.stack.length ? '<button class="back" data-act="back" aria-label="Назад">' + ic('left') + '</button>' : '') + '<button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button></div><div class="coll"><h3>' + esc(c.title) + '</h3><p class="sub">' + c.items.length + ' ' + plural(c.items.length, 'фільм і серіал', 'фільми й серіали', 'фільмів і серіалів') + '</p>';
+    if (c.limit) h += yearBar(c);
     h += '<div class="tgrid">' + vis(c.items).map(catTile).join('') + '</div>';
     if (c.error) h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(c.error)) + '</div></div>';
+    if (c.limit && c.year && !c.busy && !c.items.length && !c.error) h += '<p class="fine">За цей період замало оцінених. Спробуйте десятиліття або інший рік.</p>';
     if (c.busy) h += '<div class="spin" role="status" aria-label="Завантажуємо"></div>';
     else if (c.more) h += '<p class="morewrap"><button class="btn ghost sm" data-act="collmore">Показати ще</button></p>';
     return h + '</div>';
   }
+  // «Топ N»: вибір року або десятиліття
+  function yearBar(c) {
+    var y0 = new Date(FB.now()).getFullYear(), o = '<option value="">Усі роки</option><optgroup label="Десятиліття">', d, y;
+    for (d = Math.floor(y0 / 10) * 10; d >= 1950; d -= 10) o += '<option value="d' + d + '"' + (c.year === 'd' + d ? ' selected' : '') + '>' + d + '-ті</option>';
+    o += '</optgroup><optgroup label="Рік">';
+    for (y = y0; y >= 1950; y--) o += '<option value="y' + y + '"' + (c.year === 'y' + y ? ' selected' : '') + '>' + y + '</option>';
+    return '<div class="tools yrbar"><select data-change="collyear" aria-label="Рік випуску"' + (c.busy ? ' disabled' : '') + '>' + o + '</optgroup></select></div>';
+  }
+  async function collYear(val) {
+    var sh = ui.sheet, c = sh && sh.coll; if (!c || !c.limit || c.busy) return;
+    if (!/^([yd]\d{4})?$/.test(val)) val = '';
+    c.year = val; c.error = null;
+    if (!val) { c.items = c.base.slice(); renderSheet(); return; }
+    c.busy = true; renderSheet();
+    try { var r = await F.collection(c.id, 1, val); if (c.year === val) c.items = r.items; }
+    catch (e) { if (c.year === val) { c.error = e; c.items = []; } }
+    c.busy = false; if (ui.sheet === sh) renderSheet();
+  }
   function openColl(id) {
     var def = F.collDefs('movie').concat(F.collDefs('tv'), F.collDefs('toon')).filter(function (d) { return d.id === id; })[0], st = ui.cat.sh[id]; if (!def || !st || !st.items) return;
-    ui.sheet = { coll: { id: id, title: def.title, items: st.items.slice(), page: 1, more: st.more, busy: false, error: null } }; ui.stack = []; renderSheet();
+    ui.sheet = { coll: { id: id, title: def.title, items: st.items.slice(), base: st.items.slice(), limit: def.limit, year: '', page: 1, more: st.more, busy: false, error: null } }; ui.stack = []; renderSheet();
   }
   async function collMore() {
     var sh = ui.sheet, c = sh && sh.coll; if (!c || c.busy || !c.more) return; c.busy = true; c.error = null; renderSheet();
@@ -1101,6 +1121,7 @@
     document.addEventListener('change', function (e) {
       var el = e.target;
       if (el.dataset && el.dataset.change === 'sort') { ui.lists[ui.tab].sort = el.value; render(); }
+      if (el.dataset && el.dataset.change === 'collyear') { collYear(el.value); }
       if (el.dataset && el.dataset.change === 'plan' && ui.sheet && ui.sheet.id) { F.setPlan(ui.sheet.id, el.value); }
       if (el.dataset && el.dataset.change === 'time') { ui.lists[ui.tab].time = el.value; render(); }
       if (el.dataset && el.dataset.change === 'fl' && /^(genre|decade|vote)$/.test(el.dataset.k)) { ui.fl[el.dataset.k] = el.value; render(); }

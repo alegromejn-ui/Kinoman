@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v20';
+  var VERSION = 'v21';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -308,11 +308,22 @@
     });
   }
   // Одна добірка, сторінка за сторінкою (до 10 сторінок, по ~20 фільмів)
-  async function collection(id, page) {
+  // Фільтр «Топ N» за роком ('y2023') або десятиліттям ('d2010')
+  function yearSpan(yr) {
+    var m = /^([yd])(\d{4})$/.exec(String(yr || '')), a = m ? Number(m[2]) : 0; if (!m || a < 1900 || a > 2100) return null;
+    return m[1] === 'y' ? { key: 'y' + a, from: a + '-01-01', to: a + '-12-31', dec: false } : { key: 'd' + a, from: a + '-01-01', to: (a + 9) + '-12-31', dec: true };
+  }
+  async function collection(id, page, yr) {
     var def = collDef(id); if (!def) return { items: [], more: false };
     page = Math.max(1, Math.min(10, Math.floor(Number(page)) || 1)); if (def.limit) page = 1;
-    var ck = 'c:' + id + ':' + page, c = catCache[ck]; if (c && FB.now() - c.t < 3600000) return c.res;
+    var span = def.limit ? yearSpan(yr) : null;
+    var ck = 'c:' + id + ':' + page + (span ? ':' + span.key : ''), c = catCache[ck]; if (c && FB.now() - c.t < 3600000) return c.res;
     var p = ext({ language: 'uk-UA', page: page, include_adult: 'false' }, def.p), disc = /^\/discover\//.test(def.path), skip = def.toon ? null : EXCL[def.mt];
+    if (span) {
+      p = ext(p, dates(def.mt, span.from, span.to));
+      // за один рік голосів менше, ніж за всі роки, тому поріг м’якший
+      var vc = Number(p['vote_count.gte']); if (vc > 0) p['vote_count.gte'] = Math.max(30, Math.round(vc / (span.dec ? 3 : 8)));
+    }
     if (disc) { if (!p.sort_by) p.sort_by = 'popularity.desc'; if (skip) p.without_genres = skip.join('|'); }
     var res;
     if (def.limit) {
