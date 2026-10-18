@@ -515,3 +515,9 @@ button.qin:active{transform:scale(.9)}
 .avail.yes{color:var(--good)}
 .avail.paid{color:var(--mid)}
 .avail.no,.avail.wait{color:var(--muted);font-weight:600}
+
+/* v30: рецензія ШІ, «Для двох» */
+.review{margin:0;line-height:1.55;padding:12px 14px;border-radius:14px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}
+.review.wait,.review.none{color:var(--muted);display:flex;gap:8px;align-items:center}
+.chip.two.on{background:var(--accent);color:var(--on-accent);box-shadow:none}
+.chips.cols{height:auto;padding-top:0;align-items:center}

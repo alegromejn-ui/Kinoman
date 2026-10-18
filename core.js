@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v29';
+  var VERSION = 'v30';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -23,7 +23,7 @@
   function on(f) { listeners.push(f); }
 
   // ---------- Стан ----------
-  function freshState() { return { v: 1, key: '', gemKey: '', tmdbKey: '', sync: { url: '', code: '', at: 0, bak: 0 }, tr: {}, items: {}, cols: {}, gone: {}, mar: {}, meta: { created: FB.now(), lastBackup: 0 } }; }
+  function freshState() { return { v: 1, key: '', gemKey: '', tmdbKey: '', sync: { url: '', code: '', at: 0, bak: 0 }, tr: {}, rev: {}, items: {}, cols: {}, gone: {}, mar: {}, meta: { created: FB.now(), lastBackup: 0 } }; }
   function imgPath(p) { p = String(p || ''); return /^\/[\w-]{5,60}\.(jpg|jpeg|png|webp)$/.test(p) ? p : ''; }
   function cleanCast(a) { return (Array.isArray(a) ? a : []).slice(0, 20).map(function (c) { return c && c.name ? { id: Math.max(0, Math.floor(Number(c.id) || 0)), name: String(c.name).slice(0, 80), character: String(c.character || '').slice(0, 100), photo: imgPath(c.photo) } : null; }).filter(Boolean); }
   function cleanSeasonEps(o) { var r = {}; if (o && typeof o === 'object') Object.keys(o).slice(0, 100).forEach(function (k) { var n = Math.floor(Number(o[k])); if (/^\d{1,3}$/.test(k) && Number(k) > 0 && n > 0 && n < 1000) r[k] = n; }); return r; }
@@ -51,7 +51,7 @@
       titleUk: String(x.titleUk || '').slice(0, 200), plotUk: String(x.plotUk || '').slice(0, 2500),
       trailer: /^[\w-]{11}$/.test(String(x.trailer || '')) ? String(x.trailer) : '', seasonEps: cleanSeasonEps(x.seasonEps), nextAir: cleanNextAir(x.nextAir), lastAir: cleanNextAir(x.lastAir), planAt: /^\d{4}-\d{2}-\d{2}$/.test(String(x.planAt || '')) ? String(x.planAt) : '', tvStatus: String(x.tvStatus || '').slice(0, 40), arch: !!x.arch, tcoll: x.tcoll && Number(x.tcoll.id) > 0 && String(x.tcoll.name || '').trim() ? { id: Math.floor(Number(x.tcoll.id)), name: String(x.tcoll.name).trim().slice(0, 80) } : null, seasonAir: cleanSeasonAir(x.seasonAir), doneS: Math.max(0, Math.min(100, Math.floor(Number(x.doneS)) || 0)),
       xv: Number(x.xv) || 0, exAt: Number(x.exAt) || 0, cols: Array.isArray(x.cols) ? x.cols.map(String).filter(function (c) { return /^c[\w]{1,24}$/.test(c); }).slice(0, 50) : [],
-      status: x.status === 'seen' ? 'seen' : x.status === 'watching' ? 'watching' : 'want', myRating: my, note: String(x.note || '').slice(0, 1000),
+      two: !!x.two, status: x.status === 'seen' ? 'seen' : x.status === 'watching' ? 'watching' : 'want', myRating: my, note: String(x.note || '').slice(0, 1000),
       addedAt: Number(x.addedAt) || 0, seenAt: Number(x.seenAt) || 0, updatedAt: Number(x.updatedAt) || 0, fetchedAt: Number(x.fetchedAt) || 0,
       seasons: seasons, watched: watched
     };
@@ -68,6 +68,7 @@
     s.gemKey = typeof o.gemKey === 'string' ? o.gemKey.trim().slice(0, 200) : '';
     if (o.sync && typeof o.sync === 'object') s.sync = { url: validSyncUrl(o.sync.url), code: String(o.sync.code || '').slice(0, 100), at: Number(o.sync.at) || 0, bak: Number(o.sync.bak) || 0 };
     s.cols = cleanCols(o.cols); s.gone = cleanGone(o.gone); s.mar = cleanMar(o.mar);
+    if (o.rev && typeof o.rev === 'object') Object.keys(o.rev).slice(-300).forEach(function (k) { var v = o.rev[k]; if (isId(k) && v && typeof v === 'object') s.rev[k] = { t: String(v.t || '').slice(0, 900), none: !!v.none, at: Number(v.at) || 0 }; });
     if (o.tr && typeof o.tr === 'object') Object.keys(o.tr).slice(0, 200).forEach(function (k) { var v = o.tr[k]; if (v && Array.isArray(v.titles)) s.tr[String(k).slice(0, 100)] = { titles: v.titles.map(function (x) { return String(x).slice(0, 120); }).filter(Boolean).slice(0, 3), year: /^\d{4}$/.test(String(v.year)) ? String(v.year) : '' }; });
     if (o.items && typeof o.items === 'object') Object.keys(o.items).slice(0, 5000).forEach(function (k) { var it = normalizeItem(o.items[k]); if (it) s.items[it.id] = it; });
     if (o.meta && typeof o.meta === 'object') { s.meta.created = Number(o.meta.created) || s.meta.created; s.meta.lastBackup = Number(o.meta.lastBackup) || 0; }
@@ -684,6 +685,7 @@
     // «Мультики» — усе з жанром Animation; «Фільми» й «Серіали» тоді без мультиків, як у каталозі
     if (o.type === 'movie' || o.type === 'series') arr = arr.filter(function (it) { return it.type === o.type && !isToon(it); });
     if (o.type === 'toon') arr = arr.filter(isToon);
+    if (o.two) arr = arr.filter(function (it) { return it.two; });
     if (o.genre) arr = arr.filter(function (it) { return it.genre.indexOf(o.genre) >= 0; });
     if (o.time) arr = arr.filter(function (it) { var m = it.runtime; if (!m) return false; return o.time === '90' ? m <= 90 : o.time === '120' ? m > 90 && m <= 120 : m > 120; });
     var cmp = {
@@ -721,6 +723,25 @@
   function addCol(name) { name = String(name || '').trim().slice(0, 40); if (!name) return null; var id = 'c' + FB.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); var t = FB.now(); S.cols[id] = { name: name, at: t, upd: t, del: false }; save(); return id; }
   function renameCol(id, name) { name = String(name || '').trim().slice(0, 40); var c = S.cols[id]; if (!c || !name) return; c.name = name; c.upd = stamp(c.upd); save(); }
   function removeCol(id) { var c = S.cols[id]; if (!c) return; c.del = true; c.upd = stamp(c.upd); Object.keys(S.items).forEach(function (k) { var it = S.items[k], i = it.cols.indexOf(id); if (i >= 0) { it.cols.splice(i, 1); it.updatedAt = stamp(it.updatedAt); } }); save(); }
+  function toggleTwo(itemId) { var it = S.items[itemId]; if (!it) return false; it.two = !it.two; it.updatedAt = stamp(it.updatedAt); save(); return it.two; }
+  // Коротка рецензія від Gemini без спойлерів. Кешується в цьому телефоні (не синхронізується).
+  function reviewOf(id) { var r = S.rev && S.rev[id]; return r || null; }
+  async function aiReview(it, force) {
+    if (!S.rev) S.rev = {};
+    var c = S.rev[it.id]; if (c && !force && (c.t || c.none)) return c;
+    var kind = it.type === 'series' ? (isToon(it) ? 'мультсеріал' : 'серіал') : (isToon(it) ? 'мультфільм' : 'фільм');
+    var facts = ['Жанри: ' + (it.genre || []).join(', '), it.director ? 'Режисер: ' + it.director : '', it.actors ? 'У ролях: ' + it.actors : '', it.plot ? 'Зав’язка (англійською): ' + it.plot : '',
+      it.ratings && it.ratings.imdb != null ? 'IMDb: ' + it.ratings.imdb : ''].filter(Boolean).join('\n');
+    var o = await geminiJson('Ти кінокритик українського додатка про кіно. Напиши коротку рецензію без спойлерів на ' + kind + ' «' + it.title + '» (' + it.year + ').\n' + facts +
+      '\nПравила: 3–4 речення, до 450 знаків, українською, просто й по-людськи. Про атмосферу, тон, сильні й слабкі сторони і кому це сподобається. ' +
+      'НЕ переказуй сюжет далі зав’язки. НЕ згадуй фінал, сюжетні повороти, смерті персонажів, розгадки таємниць, хто лиходій. Не вигадуй фактів. ' +
+      'Якщо ти не знаєш цей твір достатньо, щоб чесно його оцінити, поверни known=false і порожній review. Поверни JSON: known (boolean), review (рядок).',
+      { type: 'OBJECT', properties: { known: { type: 'BOOLEAN' }, review: { type: 'STRING' } }, required: ['known', 'review'] });
+    var t = String(o && o.review || '').trim().slice(0, 900);
+    var rec = o && o.known && t ? { t: t, none: false, at: FB.now() } : { t: '', none: true, at: FB.now() };
+    var keys = Object.keys(S.rev); if (keys.length >= 300) delete S.rev[keys[0]];
+    S.rev[it.id] = rec; save(true); return rec;
+  }
   function toggleCol(itemId, colId) { var it = S.items[itemId]; if (!it || !S.cols[colId] || S.cols[colId].del) return; var i = it.cols.indexOf(colId); if (i >= 0) it.cols.splice(i, 1); else it.cols.push(colId); it.updatedAt = stamp(it.updatedAt); save(); }
   function colItems(colId) { return Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { return it.cols.indexOf(colId) >= 0; }).sort(function (a, b) { return b.updatedAt - a.updatedAt; }); }
 
@@ -990,7 +1011,7 @@
   Object.assign(FB, {
     VERSION: VERSION, init: init, on: on, save: save, isSaveFailed: function () { return saveFailed; },
     newEpisodes: newEpisodes, newSeasons: newSeasons, hasNewSeason: hasNewSeason, skipSeason: skipSeason, markEpisodeSeen: markEpisodeSeen, upcoming: upcoming, refreshSeries: refreshSeries, duoPick: duoPick, records: records, ymd: ymd,
-    discover: discover, person: person, advise: advise, findTmdb: findTmdb, colList: colList, addCol: addCol, renameCol: renameCol, removeCol: removeCol, toggleCol: toggleCol, colItems: colItems, nextForMe: nextForMe, epCode: epCode, yearStats: yearStats, syncOf: syncOf, setSync: setSync, syncNow: syncNow, mergeIn: mergeIn,
+    discover: discover, person: person, advise: advise, findTmdb: findTmdb, colList: colList, toggleTwo: toggleTwo, aiReview: aiReview, reviewOf: reviewOf, addCol: addCol, renameCol: renameCol, removeCol: removeCol, toggleCol: toggleCol, colItems: colItems, nextForMe: nextForMe, epCode: epCode, yearStats: yearStats, syncOf: syncOf, setSync: setSync, syncNow: syncNow, mergeIn: mergeIn,
     collName: collName, tmdbCollection: tmdbCollection, searchMarathons: searchMarathons, aiMarathon: aiMarathon, saveMarathon: saveMarathon, removeMarathon: removeMarathon, marathons: marathons, marathonOf: marathonOf,
     setArch: setArch, archived: archived, oldCount: oldCount, SORTS_FOR: SORTS_FOR,
     backupNow: backupNow, backupDue: backupDue, autoBackup: autoBackup, listBackups: listBackups, restoreBackup: restoreBackup,
