@@ -197,7 +197,7 @@
       return h + discGrid(disc(gk, function (pg) { return F.discover(mt, go, pg); }));
     }
     ensureShelves();
-    if (toon) h += '<section class="shelf studios"><div class="shelf-h"><h2>Студії</h2></div><div class="chips" role="group" aria-label="Студії">' + F.studios().map(function (s) { return '<button type="button" class="chip" data-act="studio" data-id="' + s.id + '">' + esc(s.name) + '</button>'; }).join('') + '</div></section>';
+    if (toon || mt === 'tv') h += '<section class="shelf studios"><div class="shelf-h"><h2>' + (toon ? 'Студії' : 'Студії й канали') + '</h2></div><div class="chips" role="group" aria-label="' + (toon ? 'Студії' : 'Студії й канали') + '">' + F.studios(mt).map(function (s) { return '<button type="button" class="chip" data-act="studio" data-id="' + s.id + '">' + esc(s.name) + '</button>'; }).join('') + '</div></section>';
     var defs = F.collDefs(mt), n = ui.cat.shown[mt], body = defs.slice(0, n).map(shelfSection).join('');
     h += body;
     var states = defs.slice(0, n).map(shelfState).filter(Boolean);

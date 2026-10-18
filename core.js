@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v24';
+  var VERSION = 'v25';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -300,9 +300,13 @@
   }
   // Топові студії анімації (ідентифікатори компаній TMDB); вибір студії не зачіпає фільтр «Без аніме й Азії»
   var STUDIOS = [['pixar', 'Pixar', 3], ['wda', 'Disney Animation', 6125], ['dw', 'DreamWorks', 521], ['illum', 'Illumination', 6704], ['sony', 'Sony Animation', 2251], ['bluesky', 'Blue Sky', 9383], ['laika', 'Laika', 11537], ['aardman', 'Aardman', 297], ['ghibli', 'Studio Ghibli', 10342]];
-  function studios() { return STUDIOS.map(function (s) { return { id: 's-' + s[0], name: s[1] }; }); }
+  // Серіали: телеканали й стрімінги (ідентифікатори мереж TMDB)
+  var NETWORKS = [['hbo', 'HBO', 49], ['netflix', 'Netflix', 213], ['apple', 'Apple TV+', 2552], ['prime', 'Prime Video', 1024], ['disney', 'Disney+', 2739], ['hulu', 'Hulu', 453], ['amc', 'AMC', 174], ['fx', 'FX', 88], ['bbc', 'BBC', 4]];
+  function studios(cat) { return (cat === 'tv' ? NETWORKS : STUDIOS).map(function (s) { return { id: (cat === 'tv' ? 'n-' : 's-') + s[0], name: s[1] }; }); }
   function studioDef(id) {
-    for (var i = 0; i < STUDIOS.length; i++) if ('s-' + STUDIOS[i][0] === id) return { id: id, title: STUDIOS[i][1] + ': найкращі за рейтингом', mt: 'movie', path: '/discover/movie', p: best(100, { with_genres: '16', with_companies: String(STUDIOS[i][2]) }), toon: true, studio: true, limit: 100 };
+    var i;
+    for (i = 0; i < STUDIOS.length; i++) if ('s-' + STUDIOS[i][0] === id) return { id: id, title: STUDIOS[i][1] + ': найкращі за рейтингом', mt: 'movie', path: '/discover/movie', p: best(100, { with_genres: '16', with_companies: String(STUDIOS[i][2]) }), toon: true, studio: true, limit: 100 };
+    for (i = 0; i < NETWORKS.length; i++) if ('n-' + NETWORKS[i][0] === id) return { id: id, title: NETWORKS[i][1] + ': найкращі серіали за рейтингом', mt: 'tv', path: '/discover/tv', p: best(300, { with_networks: String(NETWORKS[i][2]) }), toon: false, studio: true, limit: 100 };
     return null;
   }
   function collDef(id) { var s = studioDef(id); if (s) return s; var cs = ['movie', 'tv', 'toon']; for (var i = 0; i < cs.length; i++) { var L = collDefs(cs[i]); for (var j = 0; j < L.length; j++) if (L[j].id === id) return L[j]; } return null; }
