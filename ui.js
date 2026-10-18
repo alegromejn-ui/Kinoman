@@ -190,14 +190,14 @@
     h += '<div class="seg cat-seg" role="group" aria-label="Каталог">' + F.CATS.map(function (t) { return '<button type="button" data-act="hometype" data-mt="' + t[0] + '" aria-pressed="' + (mt === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
     if (!F.tmdbKeyOf()) return h + '<div class="notice">' + ic('film') + '<div><b>Каталог потребує ключ TMDB</b><div class="sub">З ним тут з’являться добірки: що в тренді, що йде в кіно, топи за жанрами й десятиліттями. Ключ безкоштовний, його вставляють у розділі «Ще».</div><p style="margin:10px 0 0"><button class="btn sm" data-act="tab" data-tab="more">Додати ключ</button></p></div></div>';
     var hsChip = '<button type="button" class="chip hs-chip' + (ui.hideSeen ? ' on' : '') + '" data-act="hideseen" aria-pressed="' + ui.hideSeen + '">' + ic('eye', 'sm') + 'Без переглянутого</button>';
-    var westChip = '<button type="button" class="chip west-chip' + (F.toonWest() ? ' on' : '') + '" data-act="west" aria-pressed="' + F.toonWest() + '">Без аніме й Азії</button>';
-    if (toon) h += '<div class="chips">' + hsChip + westChip + '</div>';
+    if (toon) h += '<div class="chips">' + hsChip + '</div>';
     else h += '<div class="chips" role="group" aria-label="Фільтри">' + hsChip + '<span class="cdiv" aria-hidden="true"></span><button class="chip' + (!ui.homeGenre ? ' on' : '') + '" data-act="hgenre" data-g="">Усе</button>' + GENRES.filter(function (g) { return g[0] !== '16' && g[0] !== 'anime'; }).map(function (g) { return '<button class="chip' + (ui.homeGenre === g[0] ? ' on' : '') + '" data-act="hgenre" data-g="' + g[0] + '">' + g[1] + '</button>'; }).join('') + '</div>';
     if (!toon && ui.homeGenre) {
       var gk = 'h:' + mt + ':' + ui.homeGenre, go = discOpts(mt, ui.homeGenre, '', '');
       return h + discGrid(disc(gk, function (pg) { return F.discover(mt, go, pg); }));
     }
     ensureShelves();
+    if (toon) h += '<section class="shelf studios"><div class="shelf-h"><h2>Студії</h2></div><div class="chips" role="group" aria-label="Студії">' + F.studios().map(function (s) { return '<button type="button" class="chip" data-act="studio" data-id="' + s.id + '">' + esc(s.name) + '</button>'; }).join('') + '</div></section>';
     var defs = F.collDefs(mt), n = ui.cat.shown[mt], body = defs.slice(0, n).map(shelfSection).join('');
     h += body;
     var states = defs.slice(0, n).map(shelfState).filter(Boolean);
@@ -285,6 +285,13 @@
     c.busy = true; renderSheet();
     try { var r = await F.collection(c.id, 1, val); if (c.year === val) c.items = r.items; }
     catch (e) { if (c.year === val) { c.error = e; c.items = []; } }
+    c.busy = false; if (ui.sheet === sh) renderSheet();
+  }
+  async function openStudio(def) {
+    var c = { id: def.id, title: def.title, items: [], base: [], limit: def.limit, year: '', page: 1, more: false, busy: true, error: null };
+    ui.sheet = { coll: c }; ui.stack = []; renderSheet(); var sh = ui.sheet;
+    try { var r = await F.collection(def.id, 1); c.items = r.items; c.base = r.items.slice(); }
+    catch (e) { c.error = e; }
     c.busy = false; if (ui.sheet === sh) renderSheet();
   }
   function openColl(id) {
@@ -884,7 +891,7 @@
       case 'moreshelves': ui.cat.shown[ui.homeMt] += 5; render(); break;
       case 'reshelf': { var rs = F.collDefs(ui.homeMt).filter(function (d) { return d.id === el.dataset.id; })[0]; if (rs) { delete ui.cat.sh[rs.id]; loadShelf(rs); paintShelf(rs); } break; }
       case 'coll': openColl(el.dataset.id); break;
-      case 'west': F.setToonWest(!F.toonWest()); ui.cat.sh = {}; ui.cat.token++; render(); break;
+      case 'studio': { var sd = F.studioDef(el.dataset.id); if (sd) openStudio(sd); break; }
       case 'hideseen': ui.hideSeen = !ui.hideSeen; try { localStorage.setItem('kinoman_hide_seen', ui.hideSeen ? '1' : ''); } catch (e) { /* без збереження */ } render(); break;
       case 'catun': {
         var un = F.tmdbItem(el.dataset.mt, el.dataset.tid);

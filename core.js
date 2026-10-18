@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v22';
+  var VERSION = 'v24';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -298,12 +298,19 @@
     }
     return L;
   }
-  function collDef(id) { var cs = ['movie', 'tv', 'toon']; for (var i = 0; i < cs.length; i++) { var L = collDefs(cs[i]); for (var j = 0; j < L.length; j++) if (L[j].id === id) return L[j]; } return null; }
+  // Топові студії анімації (ідентифікатори компаній TMDB); вибір студії не зачіпає фільтр «Без аніме й Азії»
+  var STUDIOS = [['pixar', 'Pixar', 3], ['wda', 'Disney Animation', 6125], ['dw', 'DreamWorks', 521], ['illum', 'Illumination', 6704], ['sony', 'Sony Animation', 2251], ['bluesky', 'Blue Sky', 9383], ['laika', 'Laika', 11537], ['aardman', 'Aardman', 297], ['ghibli', 'Studio Ghibli', 10342]];
+  function studios() { return STUDIOS.map(function (s) { return { id: 's-' + s[0], name: s[1] }; }); }
+  function studioDef(id) {
+    for (var i = 0; i < STUDIOS.length; i++) if ('s-' + STUDIOS[i][0] === id) return { id: id, title: STUDIOS[i][1] + ': найкращі за рейтингом', mt: 'movie', path: '/discover/movie', p: best(100, { with_genres: '16', with_companies: String(STUDIOS[i][2]) }), toon: true, studio: true, limit: 100 };
+    return null;
+  }
+  function collDef(id) { var s = studioDef(id); if (s) return s; var cs = ['movie', 'tv', 'toon']; for (var i = 0; i < cs.length; i++) { var L = collDefs(cs[i]); for (var j = 0; j < L.length; j++) if (L[j].id === id) return L[j]; } return null; }
   // Мультики: за бажанням без аніме та азійської анімації (мова оригіналу ja, zh, ko)
+  // Завжди увімкнено; аніме й азійські мультики відкриваються через «Студії» (Ghibli тощо)
   var ASIA = ['ja', 'zh', 'cn', 'ko'], west = true;
-  try { west = localStorage.getItem('kinoman_toon_west') !== '0'; } catch (e) { /* без збереження */ }
   function toonWest() { return west; }
-  function setToonWest(v) { west = !!v; try { localStorage.setItem('kinoman_toon_west', west ? '1' : '0'); } catch (e) { /* без збереження */ } catCache = {}; }
+  function setToonWest(v) { west = !!v; catCache = {}; }
   function tmdbItems(d, mt, skip, drop) {
     return (Array.isArray(d.results) ? d.results : []).filter(function (r) {
       if (!r || !(r.id > 0) || !imgPath(r.poster_path) || !clean(r.title || r.name)) return false;
@@ -323,7 +330,7 @@
     var def = collDef(id); if (!def) return { items: [], more: false };
     page = Math.max(1, Math.min(10, Math.floor(Number(page)) || 1)); if (def.limit) page = 1;
     var span = def.limit ? yearSpan(yr) : null;
-    var drop = def.toon && west ? ASIA : null, ck = 'c:' + id + ':' + page + (span ? ':' + span.key : '') + (drop ? ':w' : ''), c = catCache[ck]; if (c && FB.now() - c.t < 3600000) return c.res;
+    var drop = def.toon && !def.studio && west ? ASIA : null, ck = 'c:' + id + ':' + page + (span ? ':' + span.key : '') + (drop ? ':w' : ''), c = catCache[ck]; if (c && FB.now() - c.t < 3600000) return c.res;
     var p = ext({ language: 'uk-UA', page: page, include_adult: 'false' }, def.p), disc = /^\/discover\//.test(def.path), skip = def.toon ? null : EXCL[def.mt];
     if (span) {
       p = ext(p, dates(def.mt, span.from, span.to));
@@ -957,7 +964,7 @@
     collName: collName, tmdbCollection: tmdbCollection, searchMarathons: searchMarathons, aiMarathon: aiMarathon, saveMarathon: saveMarathon, removeMarathon: removeMarathon, marathons: marathons, marathonOf: marathonOf,
     setArch: setArch, archived: archived, oldCount: oldCount, SORTS_FOR: SORTS_FOR,
     backupNow: backupNow, backupDue: backupDue, autoBackup: autoBackup, listBackups: listBackups, restoreBackup: restoreBackup,
-    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, tmdbItem: tmdbItem, toonWest: toonWest, setToonWest: setToonWest, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
+    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, tmdbItem: tmdbItem, toonWest: toonWest, setToonWest: setToonWest, studios: studios, studioDef: studioDef, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
     getItem: getItem, setStatus: setStatus, setMyRating: setMyRating, setNote: setNote, removeItem: removeItem, restoreItem: restoreItem, refresh: refresh,
     toggleEpisode: toggleEpisode, setSeasonWatched: setSeasonWatched, seasonProgress: seasonProgress, watchedCount: watchedCount,
     list: list, genres: genres, randomPick: randomPick, stats: stats, fmtMinutes: fmtMinutes, SORTS: SORTS, brief: brief,
