@@ -521,3 +521,20 @@ button.qin:active{transform:scale(.9)}
 .review.wait,.review.none{color:var(--muted);display:flex;gap:8px;align-items:center}
 .chip.two.on{background:var(--accent);color:var(--on-accent);box-shadow:none}
 .chips.cols{height:auto;padding-top:0;align-items:center}
+.badge span.tm{font-weight:700;font-size:11px}
+.tile .badge span.imdb,.tile .badge span.tm{padding:0 7px;font-size:11px;letter-spacing:-.01em}
+.qnope{position:absolute;right:10px;top:48px;z-index:3;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:rgba(12,10,18,.66);color:rgba(255,255,255,.85);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.18);backdrop-filter:blur(6px)}
+.qnope:active{transform:scale(.9)}
+.chips.cols + .review,.chips.cols + .fine,.chips.cols + .er-t{margin-top:12px}
+.qhist{margin:6px 0 14px}
+.qh-h{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.qh-h h2{margin:14px 0 10px}
+.health .hl{list-style:none;margin:0;padding:0}
+.health .hl li{display:flex;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14.5px}
+.health .hl li:first-child{border-top:0}
+.health .hl i{width:9px;height:9px;border-radius:50%;flex:none;background:var(--good);transform:translateY(-1px)}
+.health .hl .st-warn i{background:var(--mid)}
+.health .hl .st-bad i{background:var(--bad)}
+.health .hl span{flex:1;min-width:0;color:var(--muted)}
+.health .hl b{font-weight:650;text-align:right}
+.health .hl .st-bad b{color:var(--bad)}

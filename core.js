@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v31';
+  var VERSION = 'v35';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -23,7 +23,7 @@
   function on(f) { listeners.push(f); }
 
   // ---------- Стан ----------
-  function freshState() { return { v: 1, key: '', gemKey: '', tmdbKey: '', sync: { url: '', code: '', at: 0, bak: 0 }, tr: {}, rev: {}, items: {}, cols: {}, gone: {}, mar: {}, meta: { created: FB.now(), lastBackup: 0 } }; }
+  function freshState() { return { v: 1, key: '', gemKey: '', tmdbKey: '', sync: { url: '', code: '', at: 0, bak: 0 }, tr: {}, rev: {}, imk: {}, imr: {}, nope: {}, osc: {}, recap: {}, qh: [], items: {}, cols: {}, gone: {}, mar: {}, meta: { created: FB.now(), lastBackup: 0 } }; }
   function imgPath(p) { p = String(p || ''); return /^\/[\w-]{5,60}\.(jpg|jpeg|png|webp)$/.test(p) ? p : ''; }
   function cleanCast(a) { return (Array.isArray(a) ? a : []).slice(0, 20).map(function (c) { return c && c.name ? { id: Math.max(0, Math.floor(Number(c.id) || 0)), name: String(c.name).slice(0, 80), character: String(c.character || '').slice(0, 100), photo: imgPath(c.photo) } : null; }).filter(Boolean); }
   function cleanSeasonEps(o) { var r = {}; if (o && typeof o === 'object') Object.keys(o).slice(0, 100).forEach(function (k) { var n = Math.floor(Number(o[k])); if (/^\d{1,3}$/.test(k) && Number(k) > 0 && n > 0 && n < 1000) r[k] = n; }); return r; }
@@ -68,17 +68,26 @@
     s.gemKey = typeof o.gemKey === 'string' ? o.gemKey.trim().slice(0, 200) : '';
     if (o.sync && typeof o.sync === 'object') s.sync = { url: validSyncUrl(o.sync.url), code: String(o.sync.code || '').slice(0, 100), at: Number(o.sync.at) || 0, bak: Number(o.sync.bak) || 0 };
     s.cols = cleanCols(o.cols); s.gone = cleanGone(o.gone); s.mar = cleanMar(o.mar);
+    if (o.imk && typeof o.imk === 'object') Object.keys(o.imk).slice(-3000).forEach(function (k) { if (/^(movie|tv):\d{1,9}$/.test(k) && isId(o.imk[k])) s.imk[k] = o.imk[k]; });
+    if (o.imr && typeof o.imr === 'object') Object.keys(o.imr).slice(-3000).forEach(function (k) { var v = o.imr[k]; if (isId(k) && v && num(v.r) != null) s.imr[k] = { r: num(v.r), at: Number(v.at) || 0 }; });
+    if (o.osc && typeof o.osc === 'object') Object.keys(o.osc).slice(0, 200).forEach(function (k) { var v = o.osc[k]; if (!/^\d{4}:/.test(k) || !v || typeof v !== 'object') return; if (v.tid > 0) s.osc[k] = { tid: Math.floor(v.tid), mt: 'movie', title: String(v.title || '').slice(0, 200), year: String(v.year || '').slice(0, 4), poster: imgPath(v.poster), vote: num(v.vote) }; else if (v.none) s.osc[k] = { none: true, at: Number(v.at) || 0 }; });
+    if (o.recap && typeof o.recap === 'object') Object.keys(o.recap).slice(-200).forEach(function (k) { var v = o.recap[k]; if (/^tt\d{5,10}:\d{1,3}(e\d{1,4})?$/.test(k) && v && typeof v === 'object') s.recap[k] = { t: String(v.t || '').slice(0, 2500), none: !!v.none, at: Number(v.at) || 0 }; });
+    if (o.nope && typeof o.nope === 'object') Object.keys(o.nope).slice(-5000).forEach(function (k) { if (/^(movie|tv):\d{1,9}$/.test(k)) s.nope[k] = Number(o.nope[k]) || 1; });
     if (o.rev && typeof o.rev === 'object') Object.keys(o.rev).slice(-300).forEach(function (k) { var v = o.rev[k]; if (isId(k) && v && typeof v === 'object') s.rev[k] = { t: String(v.t || '').slice(0, 900), none: !!v.none, at: Number(v.at) || 0 }; });
     if (o.tr && typeof o.tr === 'object') Object.keys(o.tr).slice(0, 200).forEach(function (k) { var v = o.tr[k]; if (v && Array.isArray(v.titles)) s.tr[String(k).slice(0, 100)] = { titles: v.titles.map(function (x) { return String(x).slice(0, 120); }).filter(Boolean).slice(0, 3), year: /^\d{4}$/.test(String(v.year)) ? String(v.year) : '' }; });
     if (o.items && typeof o.items === 'object') Object.keys(o.items).slice(0, 5000).forEach(function (k) { var it = normalizeItem(o.items[k]); if (it) s.items[it.id] = it; });
-    if (o.meta && typeof o.meta === 'object') { s.meta.created = Number(o.meta.created) || s.meta.created; s.meta.lastBackup = Number(o.meta.lastBackup) || 0; }
+    if (o.meta && typeof o.meta === 'object') { s.meta.created = Number(o.meta.created) || s.meta.created; s.meta.lastBackup = Number(o.meta.lastBackup) || 0;
+      var cn = o.meta.cnt; if (cn && typeof cn === 'object' && /^\d{4}-\d{2}-\d{2}$/.test(String(cn.d))) s.meta.cnt = { d: cn.d, omdb: Number(cn.omdb) || 0, gem: Number(cn.gem) || 0, tmdb: Number(cn.tmdb) || 0, omLimit: !!cn.omLimit, gemLimit: !!cn.gemLimit }; }
+    if (Array.isArray(o.qh)) s.qh = o.qh.map(function (x) { return String(x || '').trim().slice(0, 80); }).filter(Boolean).slice(0, 8);
     return s;
   }
   function load() {
     try { var raw = localStorage.getItem(KEY); if (raw) { S = normalizeState(JSON.parse(raw)); return; } } catch (e) { /* пошкоджено: починаємо наново */ }
     S = freshState();
   }
+  var saveSeq = 0;
   function save(silent) {
+    saveSeq++;
     try { localStorage.setItem(KEY, JSON.stringify(S)); saveFailed = false; } catch (e) { saveFailed = true; }
     if (!silent) emit();
   }
@@ -118,6 +127,7 @@
         var res;
         try {
           // ключ іде лише в заголовку, ніколи в адресі
+          bump('gem');
           res = await FB.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(payload) });
         } catch (ne) {
           lastErr = softErr = err('GEM_NETWORK');
@@ -127,6 +137,7 @@
         if (res.ok) return await res.json();
         lastErr = err('GEM_HTTP'); lastErr.status = res.status; lastErr.model = model; lastErr.detail = await gemErrorDetail(res);
         if (res.status === 404) break;
+        if (res.status === 429) bump('gem', 'gemLimit');
         if (res.status === 429 || res.status >= 500) { softErr = lastErr; if (used >= FB.geminiDelays.length) break; await FB.sleep(FB.geminiDelays[used++]); continue; }
         throw lastErr;
       }
@@ -189,6 +200,7 @@
     // довгий «API Read Access Token» іде в заголовку; короткий ключ API TMDB приймає лише в адресі
     if (key.length > 60) headers.Authorization = 'Bearer ' + key; else q.push('api_key=' + encodeURIComponent(key));
     var res;
+    bump('tmdb');
     try { res = await FB.fetch('https://api.themoviedb.org/3' + path + (q.length ? '?' + q.join('&') : ''), { headers: headers }); } catch (e) { throw err('TMDB_NETWORK'); }
     if (!res.ok) { var e2 = err('TMDB_HTTP'); e2.status = res.status; throw e2; }
     try { return await res.json(); } catch (e3) { throw err('TMDB_NETWORK'); }
@@ -258,9 +270,29 @@
     if (a.free) return 'Безкоштовно в Київстар ТБ';
     return 'Київстар ТБ: ' + [a.rent ? 'оренда' : '', a.buy ? 'купівля' : ''].filter(Boolean).join(', ');
   }
+  // Оцінки IMDb для обкладинок каталогу: лише ті, що вже відомі (списки й відкриті картки), без нових запитів до OMDb
+  function capMap(m, n) { var ks = Object.keys(m); for (var i = 0; i < ks.length - n; i++) delete m[ks[i]]; }
+  function rememberImdbId(mt, tid, id) { if (!S.imk) S.imk = {}; var k = (mt === 'tv' ? 'tv' : 'movie') + ':' + Math.floor(Number(tid)); if (S.imk[k] === id) return; S.imk[k] = id; capMap(S.imk, 3000); save(true); }
+  function rememberImdbRating(id, r) { if (r == null || !isId(id)) return; if (!S.imr) S.imr = {}; S.imr[id] = { r: r, at: FB.now() }; capMap(S.imr, 3000); save(true); }
+  var libIdx = null, libIdxKey = '';
+  function imdbFor(mt, tid) {
+    var k = (mt === 'tv' ? 'tv' : 'movie') + ':' + Math.floor(Number(tid));
+    var sig = saveSeq + '|' + Object.keys(S.items).length;
+    if (!libIdx || libIdxKey !== sig) { libIdx = {}; libIdxKey = sig; Object.keys(S.items).forEach(function (id) { var it = S.items[id]; if (it.tmdbId > 0 && it.mt) libIdx[it.mt + ':' + it.tmdbId] = id; }); }
+    var id = libIdx[k] || (S.imk && S.imk[k]); if (!id) return null;
+    var lib = S.items[id]; if (lib && lib.ratings && lib.ratings.imdb != null) return lib.ratings.imdb;
+    var c = S.imr && S.imr[id]; return c ? c.r : null;
+  }
+  // «Не цікавить»: приховані з каталогу (лише в цьому телефоні)
+  function nopeKey(mt, tid) { return (mt === 'tv' ? 'tv' : 'movie') + ':' + Math.floor(Number(tid)); }
+  function isNope(mt, tid) { return !!(S.nope && S.nope[nopeKey(mt, tid)]); }
+  function setNope(mt, tid, on) { if (!S.nope) S.nope = {}; var k = nopeKey(mt, tid); if (on) S.nope[k] = FB.now(); else delete S.nope[k]; capMap(S.nope, 5000); save(); }
+  function nopeCount() { return Object.keys(S.nope || {}).length; }
+  function clearNope() { S.nope = {}; save(); }
   async function tmdbImdbId(mt, tid) {
     var d = await tmdb('/' + (mt === 'tv' ? 'tv' : 'movie') + '/' + Math.floor(Number(tid)) + '/external_ids', {});
     var id = clean(d.imdb_id); if (!isId(id)) throw err('NO_IMDB');
+    rememberImdbId(mt, tid, id);
     return id;
   }
   // Каталог для головної: добірки TMDB, кеш на годину лише в пам’яті
@@ -278,8 +310,10 @@
       add('t-trend', 'У тренді цього тижня', 'tv', '/trending/tv/week');
       add('t-now', 'Виходять зараз', 'tv', '/tv/on_the_air');
       add('t-top', 'Топ 100 серіалів за рейтингом', 'tv', '/discover/tv', best(1000), 0, 100);
+      add('t-ua', 'Українські серіали', 'tv', '/discover/tv', { with_origin_country: 'UA' });
       add('t-pop', 'Популярні', 'tv', '/tv/popular');
       add('t-gems', 'Приховані перлини', 'tv', '/discover/tv', best(200, { 'vote_average.gte': 7.8, 'vote_count.lte': 1500 }));
+      add('t-uatop', 'Українські серіали: топ 100 за рейтингом', 'tv', '/discover/tv', best(15, { with_origin_country: 'UA' }), 0, 100);
       add('t-2020', 'Найкращі 2020-х', 'tv', '/discover/tv', best(500, dates('tv', '2020-01-01', '2029-12-31')));
       add('t-2010', 'Найкращі 2010-х', 'tv', '/discover/tv', best(800, dates('tv', '2010-01-01', '2019-12-31')));
       add('t-2000', 'Найкращі 2000-х', 'tv', '/discover/tv', best(500, dates('tv', '2000-01-01', '2009-12-31')));
@@ -291,11 +325,11 @@
       add('t-action', 'Бойовики й пригоди', 'tv', '/discover/tv', best(800, { with_genres: '10759' }));
       add('t-mystery', 'Детективи й містика', 'tv', '/discover/tv', best(500, { with_genres: '9648' }));
       add('t-short', 'Легкі на вечір: серії до 30 хвилин', 'tv', '/discover/tv', best(300, { 'with_runtime.lte': 30 }));
-      add('t-ua', 'Українські серіали', 'tv', '/discover/tv', { with_original_language: 'uk' });
     } else if (cat === 'toon') {
       add('c-pop', 'Мультфільми: популярні', 'movie', '/discover/movie', { with_genres: '16' }, 1);
       add('c-new', 'Нові мультфільми', 'movie', '/discover/movie', ext({ with_genres: '16' }, dates('movie', yAgo, '')), 1);
       add('c-top', 'Топ 100 мультфільмів за рейтингом', 'movie', '/discover/movie', best(1000, { with_genres: '16' }), 1, 100);
+      add('c-ua', 'Українські мультфільми', 'movie', '/discover/movie', { with_genres: '16', with_origin_country: 'UA' }, 1);
       // Топ 100 за віком: вікові рейтинги США (у TMDB вони є майже для всіх мультфільмів)
       add('c-age0', 'Топ 100 для малечі (0+)', 'movie', '/discover/movie', best(150, { with_genres: '16', certification_country: 'US', certification: 'G' }), 1, 100);
       add('c-age6', 'Топ 100 для дітей (6+)', 'movie', '/discover/movie', best(300, { with_genres: '16', certification_country: 'US', certification: 'PG' }), 1, 100);
@@ -312,8 +346,11 @@
       add('m-trend', 'У тренді цього тижня', 'movie', '/trending/movie/week');
       add('m-now', 'Зараз у кінотеатрах', 'movie', '/movie/now_playing', { region: 'UA' });
       add('m-top', 'Топ 100 фільмів за рейтингом', 'movie', '/discover/movie', best(5000), 0, 100);
+      add('m-ua', 'Українське кіно', 'movie', '/discover/movie', { with_origin_country: 'UA', without_genres: '16' });
       add('m-pop', 'Популярні', 'movie', '/movie/popular');
       add('m-gems', 'Приховані перлини', 'movie', '/discover/movie', best(300, { 'vote_average.gte': 7.4, 'vote_count.lte': 2500 }));
+      L.push({ id: 'm-oscar', title: 'Оскар: найкращий фільм', mt: 'movie', path: '', p: {}, toon: false, limit: 0, oscar: true });
+      add('m-uatop', 'Українське кіно: топ 100 за рейтингом', 'movie', '/discover/movie', best(30, { with_origin_country: 'UA', without_genres: '16' }), 0, 100);
       add('m-2020', 'Найкращі 2020-х', 'movie', '/discover/movie', best(1000, dates('movie', '2020-01-01', '2029-12-31')));
       add('m-2010', 'Найкращі 2010-х', 'movie', '/discover/movie', best(2000, dates('movie', '2010-01-01', '2019-12-31')));
       add('m-2000', 'Найкращі 2000-х', 'movie', '/discover/movie', best(2000, dates('movie', '2000-01-01', '2009-12-31')));
@@ -328,7 +365,6 @@
       add('m-hor', 'Найкращі жахи', 'movie', '/discover/movie', best(1500, { with_genres: '27' }));
       add('m-act', 'Найкращі бойовики', 'movie', '/discover/movie', best(2000, { with_genres: '28' }));
       add('m-dra', 'Найкращі драми', 'movie', '/discover/movie', best(3000, { with_genres: '18' }));
-      add('m-ua', 'Українське кіно', 'movie', '/discover/movie', { with_original_language: 'uk' });
     }
     return L;
   }
@@ -364,8 +400,27 @@
     var m = /^([yd])(\d{4})$/.exec(String(yr || '')), a = m ? Number(m[2]) : 0; if (!m || a < 1900 || a > 2100) return null;
     return m[1] === 'y' ? { key: 'y' + a, from: a + '-01-01', to: a + '-12-31', dec: false } : { key: 'd' + a, from: a + '-01-01', to: (a + 9) + '-12-31', dec: true };
   }
+  // Переможці «Оскара» в номінації «Найкращий фільм», від новіших до старіших (рік виходу фільму)
+  var OSCARS = [[2025, "One Battle After Another"], [2024, "Anora"], [2023, "Oppenheimer"], [2022, "Everything Everywhere All at Once"], [2021, "CODA"], [2020, "Nomadland"], [2019, "Parasite"], [2018, "Green Book"], [2017, "The Shape of Water"], [2016, "Moonlight"], [2015, "Spotlight"], [2014, "Birdman"], [2013, "12 Years a Slave"], [2012, "Argo"], [2011, "The Artist"], [2010, "The King's Speech"], [2008, "The Hurt Locker"], [2008, "Slumdog Millionaire"], [2007, "No Country for Old Men"], [2006, "The Departed"], [2004, "Crash"], [2004, "Million Dollar Baby"], [2003, "The Lord of the Rings: The Return of the King"], [2002, "Chicago"], [2001, "A Beautiful Mind"], [2000, "Gladiator"], [1999, "American Beauty"], [1998, "Shakespeare in Love"], [1997, "Titanic"], [1996, "The English Patient"], [1995, "Braveheart"], [1994, "Forrest Gump"], [1993, "Schindler's List"], [1992, "Unforgiven"], [1991, "The Silence of the Lambs"], [1990, "Dances with Wolves"], [1989, "Driving Miss Daisy"], [1988, "Rain Man"], [1987, "The Last Emperor"], [1986, "Platoon"], [1985, "Out of Africa"], [1984, "Amadeus"], [1983, "Terms of Endearment"], [1982, "Gandhi"], [1981, "Chariots of Fire"], [1980, "Ordinary People"], [1979, "Kramer vs. Kramer"], [1978, "The Deer Hunter"], [1977, "Annie Hall"], [1976, "Rocky"], [1975, "One Flew Over the Cuckoo's Nest"], [1974, "The Godfather Part II"], [1973, "The Sting"], [1972, "The Godfather"], [1971, "The French Connection"], [1970, "Patton"], [1969, "Midnight Cowboy"], [1968, "Oliver!"], [1967, "In the Heat of the Night"], [1966, "A Man for All Seasons"], [1965, "The Sound of Music"], [1964, "My Fair Lady"], [1963, "Tom Jones"], [1962, "Lawrence of Arabia"], [1961, "West Side Story"], [1960, "The Apartment"], [1959, "Ben-Hur"], [1958, "Gigi"], [1957, "The Bridge on the River Kwai"], [1956, "Around the World in 80 Days"], [1955, "Marty"], [1954, "On the Waterfront"], [1953, "From Here to Eternity"], [1952, "The Greatest Show on Earth"], [1951, "An American in Paris"], [1950, "All About Eve"], [1949, "All the King's Men"], [1948, "Hamlet"], [1947, "Gentleman's Agreement"], [1946, "The Best Years of Our Lives"], [1945, "The Lost Weekend"], [1944, "Going My Way"], [1942, "Casablanca"], [1942, "Mrs. Miniver"], [1941, "How Green Was My Valley"], [1940, "Rebecca"], [1939, "Gone with the Wind"], [1938, "You Can't Take It with You"], [1937, "The Life of Emile Zola"], [1936, "The Great Ziegfeld"], [1935, "Mutiny on the Bounty"], [1934, "It Happened One Night"], [1933, "Cavalcade"], [1932, "Grand Hotel"], [1931, "Cimarron"], [1930, "All Quiet on the Western Front"], [1929, "The Broadway Melody"], [1927, "Wings"]];
+  async function oscarPage(page) {
+    if (!S.osc) S.osc = {};
+    var part = OSCARS.slice((page - 1) * 20, page * 20);
+    var items = await Promise.all(part.map(async function (o) {
+      var k = o[0] + ':' + o[1], c = S.osc[k];
+      if (c && c.tid) return c;
+      if (c && c.none && FB.now() - c.at < 7 * 86400000) return null;
+      var d = await tmdb('/search/movie', { query: o[1], primary_release_year: o[0], language: 'uk-UA', include_adult: 'false' }).catch(function () { return null; });
+      if (d && !(d.results || []).length) d = await tmdb('/search/movie', { query: o[1], year: o[0] + 1, language: 'uk-UA', include_adult: 'false' }).catch(function () { return null; });
+      var x = d ? tmdbItems(d, 'movie', null, null)[0] : null;
+      S.osc[k] = x ? x : { none: true, at: FB.now() };
+      return x || null;
+    }));
+    save(true);
+    return { items: items.filter(Boolean).map(function (x) { return ext(x, {}); }), more: page * 20 < OSCARS.length };
+  }
   async function collection(id, page, yr) {
     var def = collDef(id); if (!def) return { items: [], more: false };
+    if (def.oscar) { page = Math.max(1, Math.min(10, Math.floor(Number(page)) || 1)); var ok0 = 'c:' + id + ':' + page, oc = catCache[ok0]; if (oc && FB.now() - oc.t < 3600000) return oc.res; var ores = await oscarPage(page); catCache[ok0] = { t: FB.now(), res: ores }; return ores; }
     page = Math.max(1, Math.min(10, Math.floor(Number(page)) || 1)); if (def.limit) page = 1;
     var span = def.limit ? yearSpan(yr) : null;
     var drop = def.toon && !def.studio && west ? ASIA : null, ck = 'c:' + id + ':' + page + (span ? ':' + span.key : '') + (drop ? ':w' : ''), c = catCache[ck]; if (c && FB.now() - c.t < 3600000) return c.res;
@@ -494,8 +549,15 @@
       s.src = url + '&callback=' + cb; document.head.appendChild(s);
     });
   }
+  // Лічильники запитів за сьогодні (для «Стану» в «Ще»)
+  function bump(kind, flag) {
+    if (!S.meta) S.meta = {}; var d = ymd(FB.now()), c = S.meta.cnt;
+    if (!c || c.d !== d) c = S.meta.cnt = { d: d, omdb: 0, gem: 0, tmdb: 0, omLimit: false, gemLimit: false };
+    if (flag) c[flag] = true; else c[kind] = (c[kind] || 0) + 1;
+  }
   async function api(params) {
     var key = keyOf(); if (!key) throw err('NO_KEY');
+    bump('omdb');
     var q = ['apikey=' + encodeURIComponent(key)];
     Object.keys(params).forEach(function (k) { if (params[k] !== '' && params[k] != null) q.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k])); });
     var url = 'https://www.omdbapi.com/?' + q.join('&'); var data;
@@ -510,7 +572,7 @@
     if (data && data.Response === 'False') {
       var m = String(data.Error || '');
       if (/invalid api key|no api key/i.test(m)) throw err('INVALID_KEY', m, m);
-      if (/limit/i.test(m)) throw err('LIMIT', m, m);
+      if (/limit/i.test(m)) { bump('omdb', 'omLimit'); save(true); throw err('LIMIT', m, m); }
       if (/not found|incorrect imdb/i.test(m)) throw err('NOT_FOUND', m, m);
       if (/too many/i.test(m)) throw err('TOO_MANY', m, m);
       throw err('API', m, m);
@@ -567,7 +629,7 @@
     if (hasCyrillic(q)) {
       // Назва українською: Gemini підказує оригінальну назву, а далі звичайний пошук OMDb
       if (page && page > 1) return { items: [], total: 0 };
-      if (!gemKeyOf()) throw err('NEED_GEMINI');
+      if (!gemKeyOf()) { if (tmdbKeyOf()) { var tb = await tmdbFind(q, type, 'uk-UA'); if (tb) return tb; return { items: [], total: 0 }; } throw err('NEED_GEMINI'); }
       var tr = await translateQuery(q), items = [], seen = {}, firstErr = null;
       for (var i = 0; i < tr.titles.length; i++) {
         try {
@@ -578,18 +640,54 @@
         if (items.length >= 8) break;
       }
       if (!items.length && firstErr && firstErr.code !== 'NOT_FOUND' && firstErr.code !== 'TOO_MANY') throw firstErr;
+      if (!items.length && tmdbKeyOf()) { var tb2 = await tmdbFind(q, type, 'uk-UA').catch(function () { return null; }); if (tb2) return tb2; }
       return { items: items, total: items.length, translatedAs: tr.titles[0] };
     }
     // Рік наприкінці назви («Dark 2017») уточнює пошук; якщо з роком нічого немає, шукаємо як є («Blade Runner 2049»)
     var m = /^(.*\S)\s+((?:19|20)\d{2})$/.exec(q);
     if (m) { var r0 = await trySearch(m[1], type, page, m[2]); if (r0.total) return r0; }
-    return trySearch(q, type, page, '');
+    var r1 = await trySearch(q, type, page, '');
+    if (r1.total || (page && page > 1)) return r1;
+    // Нічого не знайшли: можливо, одруківка («intersteller»). Спершу Gemini, потім TMDB.
+    if (gemKeyOf()) {
+      try {
+        var tr2 = await translateQuery(q);
+        for (var j = 0; j < tr2.titles.length; j++) {
+          if (tr2.titles[j].toLowerCase() === q.toLowerCase()) continue;
+          var r2 = await trySearch(tr2.titles[j], type, 1, ''); if (r2.items.length) return { items: r2.items, total: r2.items.length, corrected: tr2.titles[j] };
+        }
+      } catch (e3) { if (e3.code === 'INVALID_KEY' || e3.code === 'LIMIT' || e3.code === 'NO_KEY') throw e3; }
+    }
+    if (tmdbKeyOf()) { var tb3 = await tmdbFind(q, type, 'en-US').catch(function () { return null; }); if (tb3) return tb3; }
+    return r1;
+  }
+  // Запасний пошук через TMDB: він терпиміший до написання й знає українські назви
+  async function tmdbFind(q, type, lang) {
+    var d = await tmdb('/search/multi', { query: q, language: lang || 'en-US', include_adult: 'false', page: 1 });
+    var res = (Array.isArray(d.results) ? d.results : []).filter(function (r) { return r && r.id > 0 && (r.media_type === 'movie' || r.media_type === 'tv') && (!type || (type === 'series') === (r.media_type === 'tv')); }).slice(0, 6);
+    var items = (await Promise.all(res.map(async function (r) {
+      try { var id = await tmdbImdbId(r.media_type, r.id); return { id: id, title: clean(r.title || r.name), year: yearOf(r.release_date || r.first_air_date), type: r.media_type === 'tv' ? 'series' : 'movie', poster: imgPath(r.poster_path) ? tmdbImg(r.poster_path, 'w185') : '' }; } catch (e) { return null; }
+    }))).filter(Boolean);
+    if (!items.length) return null;
+    return { items: items, total: items.length, corrected: items[0].title };
+  }
+  // Історія пошуку: останні 8 запитів, що дали результат
+  function addQuery(q) { q = String(q || '').trim().slice(0, 80); if (!q) return; if (!S.qh) S.qh = []; S.qh = [q].concat(S.qh.filter(function (x) { return x.toLowerCase() !== q.toLowerCase(); })).slice(0, 8); save(true); }
+  function queries() { return (S.qh || []).slice(); }
+  function clearQueries() { S.qh = []; save(true); }
+  // «Стан»: усе, що варто знати одним поглядом
+  function status() {
+    var c = S.meta && S.meta.cnt && S.meta.cnt.d === ymd(FB.now()) ? S.meta.cnt : { omdb: 0, gem: 0, tmdb: 0 };
+    var size = 0; try { size = (localStorage.getItem(KEY) || '').length; } catch (e) { size = 0; }
+    return { omdbKey: !!keyOf(), tmdbKey: !!tmdbKeyOf(), gemKey: !!gemKeyOf(), omdb: c.omdb || 0, gem: c.gem || 0, tmdb: c.tmdb || 0, omLimit: !!c.omLimit, gemLimit: !!c.gemLimit,
+      sync: !!(S.sync.url && S.sync.code), syncAt: S.sync.at || 0, bakAt: S.sync.bak || 0, fileAt: (S.meta && S.meta.lastBackup) || 0, items: Object.keys(S.items).length, kb: Math.round(size / 1024), saveFailed: !!saveFailed };
   }
   function brief(it) { return { id: it.id, title: it.title, year: it.year, type: it.type, poster: it.poster }; }
   async function details(id) {
     if (!isId(id)) throw err('NOT_FOUND');
     var it = toItem(await api({ i: id, plot: 'full' }));
     if (!it) throw err('API', 'bad response');
+    rememberImdbRating(id, it.ratings && it.ratings.imdb);
     return it;
   }
   async function loadSeason(id, n) {
@@ -751,6 +849,39 @@
     var rec = o && o.known && t ? { t: t, none: false, at: FB.now() } : { t: '', none: true, at: FB.now() };
     var keys = Object.keys(S.rev); if (keys.length >= 300) delete S.rev[keys[0]];
     S.rev[it.id] = rec; save(true); return rec;
+  }
+  // «Нагадай, що було»: переказ сезону, який уже переглянуто (до певної серії, якщо сезон не завершено)
+  function recapOptions(it) {
+    if (!it || it.type !== 'series') return [];
+    var out = [], best = null;
+    Object.keys(it.watched || {}).forEach(function (k) { var m = /^(\d+)x(\d+)$/.exec(k); if (!m) return; var s1 = +m[1], e1 = +m[2]; if (!best || s1 > best.s || (s1 === best.s && e1 > best.e)) best = { s: s1, e: e1 }; });
+    var total = it.totalSeasons || Object.keys(it.seasonEps || {}).length;
+    if (best) {
+      var n = epsIn(it, best.s), full = n && best.e >= n;
+      var lastFull = full ? best.s : best.s - 1;
+      for (var k = Math.max(1, lastFull - 2); k <= lastFull; k++) out.push({ s: k, e: 0 });
+      if (!full && best.e > 0) out.push({ s: best.s, e: best.e });
+    } else {
+      var upto = it.status === 'seen' ? total : total - 1;
+      for (var k2 = Math.max(1, upto - 2); k2 <= upto; k2++) out.push({ s: k2, e: 0 });
+    }
+    return out;
+  }
+  function recapKey(it, o) { return it.id + ':' + o.s + (o.e ? 'e' + o.e : ''); }
+  function recapOf(it, o) { return S.recap && S.recap[recapKey(it, o)] || null; }
+  async function aiRecap(it, o, force) {
+    if (!S.recap) S.recap = {};
+    var key = recapKey(it, o), c = S.recap[key]; if (c && !force && (c.t || c.none)) return c;
+    var scope = o.e ? 'сезону ' + o.s + ' до серії ' + o.e + ' включно' : 'сезону ' + o.s;
+    var res = await geminiJson('Ти допомагаєш глядачеві згадати серіал перед продовженням. Серіал «' + it.title + '» (' + it.year + '). Коротко перекажи українською події ' + scope + '.\n' +
+      'Правила: 6–9 речень, з іменами головних героїв, головні сюжетні лінії й чим закінчився ' + (o.e ? 'цей відрізок' : 'сезон') + '. ' +
+      'НЕ згадуй нічого, що відбувається пізніше' + (o.e ? ' серії ' + o.e + ' сезону ' + o.s : ' сезону ' + o.s) + ', і не натякай на наступні події. Не вигадуй. ' +
+      'Якщо ти не пам’ятаєш цей сезон достатньо точно, поверни known=false і порожній recap. Поверни JSON: known (boolean), recap (рядок).',
+      { type: 'OBJECT', properties: { known: { type: 'BOOLEAN' }, recap: { type: 'STRING' } }, required: ['known', 'recap'] });
+    var t = String(res && res.recap || '').trim().slice(0, 2500);
+    var rec = res && res.known && t ? { t: t, none: false, at: FB.now() } : { t: '', none: true, at: FB.now() };
+    var ks = Object.keys(S.recap); if (ks.length >= 200) delete S.recap[ks[0]];
+    S.recap[key] = rec; save(true); return rec;
   }
   function toggleCol(itemId, colId) { var it = S.items[itemId]; if (!it || !S.cols[colId] || S.cols[colId].del) return; var i = it.cols.indexOf(colId); if (i >= 0) it.cols.splice(i, 1); else it.cols.push(colId); it.updatedAt = stamp(it.updatedAt); save(); }
   function colItems(colId) { return Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { return it.cols.indexOf(colId) >= 0; }).sort(function (a, b) { return b.updatedAt - a.updatedAt; }); }
@@ -1022,7 +1153,7 @@
   Object.assign(FB, {
     VERSION: VERSION, init: init, on: on, save: save, isSaveFailed: function () { return saveFailed; },
     newEpisodes: newEpisodes, newSeasons: newSeasons, hasNewSeason: hasNewSeason, skipSeason: skipSeason, markEpisodeSeen: markEpisodeSeen, upcoming: upcoming, refreshSeries: refreshSeries, duoPick: duoPick, records: records, ymd: ymd,
-    discover: discover, person: person, advise: advise, findTmdb: findTmdb, colList: colList, toggleTwo: toggleTwo, aiReview: aiReview, reviewOf: reviewOf, addCol: addCol, renameCol: renameCol, removeCol: removeCol, toggleCol: toggleCol, colItems: colItems, nextForMe: nextForMe, epCode: epCode, yearStats: yearStats, syncOf: syncOf, setSync: setSync, syncNow: syncNow, mergeIn: mergeIn,
+    discover: discover, person: person, advise: advise, findTmdb: findTmdb, colList: colList, addQuery: addQuery, queries: queries, clearQueries: clearQueries, status: status, recapOptions: recapOptions, recapOf: recapOf, aiRecap: aiRecap, imdbFor: imdbFor, isNope: isNope, setNope: setNope, nopeCount: nopeCount, clearNope: clearNope, toggleTwo: toggleTwo, aiReview: aiReview, reviewOf: reviewOf, addCol: addCol, renameCol: renameCol, removeCol: removeCol, toggleCol: toggleCol, colItems: colItems, nextForMe: nextForMe, epCode: epCode, yearStats: yearStats, syncOf: syncOf, setSync: setSync, syncNow: syncNow, mergeIn: mergeIn,
     collName: collName, tmdbCollection: tmdbCollection, searchMarathons: searchMarathons, aiMarathon: aiMarathon, saveMarathon: saveMarathon, removeMarathon: removeMarathon, marathons: marathons, marathonOf: marathonOf,
     setArch: setArch, archived: archived, oldCount: oldCount, SORTS_FOR: SORTS_FOR,
     backupNow: backupNow, backupDue: backupDue, autoBackup: autoBackup, listBackups: listBackups, restoreBackup: restoreBackup,
