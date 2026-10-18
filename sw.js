@@ -1,7 +1,7 @@
 /* Сервісний воркер: каркас додатка відкривається без інтернету.
    Сторінка береться з мережі (щоб приходили оновлення), а коли мережі немає, з кешу.
    Постери з інших адрес кешуються окремо (кеш зображень), щоб вони відкривалися й без інтернету. */
-const VERSION = 'kinoman-v26';
+const VERSION = 'kinoman-v27';
 const IMG = 'kinoman-img';
 const IMG_MAX = 400;
 const IMG_HOSTS = ['m.media-amazon.com', 'image.tmdb.org'];
@@ -10,7 +10,7 @@ const SHELL = ['./', 'index.html', 'styles.css', 'core.js', 'ui.js', 'manifest.j
   'fonts/unbounded-cyrillic-ext-wght-normal.woff2', 'fonts/unbounded-cyrillic-wght-normal.woff2', 'fonts/unbounded-latin-wght-normal.woff2'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== IMG).map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -30,7 +30,8 @@ self.addEventListener('fetch', e => {
     return;
   }
   e.respondWith(caches.match(req).then(hit => {
-    const net = fetch(req).then(res => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); } return res; }).catch(() => hit);
+    // свіжа копія з сервера, а не з кешу браузера (інакше після оновлення може лишитися стара версія)
+    const net = fetch(req, { cache: 'no-cache' }).then(res => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); } return res; }).catch(() => hit);
     return hit || net;
   }));
 });

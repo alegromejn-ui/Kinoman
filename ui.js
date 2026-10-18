@@ -500,6 +500,7 @@
     if (ui.backupMsg) h += '<p class="' + (ui.backupMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.backupMsg.text) + '</p>';
     if (F.isSaveFailed()) h += '<p class="er-t">Телефон не дає зберегти дані. Звільніть місце або вимкніть приватний режим.</p>';
     h += '</section>';
+    h += '<p class="fine"><button class="btn ghost sm" data-act="hardupd">' + ic('refresh', 'sm') + 'Оновити додаток</button></p>';
     h += '<p class="fine">Версія додатка: kinoman-' + F.VERSION + '. Дані фільмів: <a href="https://www.omdbapi.com/" target="_blank" rel="noopener">OMDb API</a>. Опис і назви англійською. Рейтинги належать IMDb, Rotten Tomatoes та Metacritic.</p>';
     return h;
   }
@@ -1053,6 +1054,13 @@
       case 'remove': {
         var gone = F.removeItem(ui.sheet.id); dismiss();
         if (gone) toast('Видалено зі списків', 'Повернути', function () { F.restoreItem(gone); }); break;
+      }
+      case 'hardupd': {
+        // Лише файли додатка: списки, оцінки й ключі лишаються на місці
+        toast('Оновлюємо…');
+        try { if (navigator.serviceWorker) { var regs = await navigator.serviceWorker.getRegistrations(); for (var ri = 0; ri < regs.length; ri++) { try { await regs[ri].update(); } catch (e2) { /* без мережі */ } } } } catch (e) { /* немає підтримки */ }
+        try { if (window.caches) { var ks = await caches.keys(); await Promise.all(ks.filter(function (k) { return k !== 'kinoman-img'; }).map(function (k) { return caches.delete(k); })); } } catch (e) { /* немає підтримки */ }
+        location.reload(); break;
       }
       case 'ltype': ui.lists[ui.tab].type = el.dataset.type; render(); break;
       case 'genre': ui.lists[ui.tab].genre = el.dataset.genre; render(); break;
