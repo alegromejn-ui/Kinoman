@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v27';
+  var VERSION = 'v28';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -223,6 +223,29 @@
     if (ex.titleUk && !it.titleUk) it.titleUk = ex.titleUk;
     if (ex.plotUk && !it.plotUk) it.plotUk = ex.plotUk;
     it.updatedAt = stamp(it.updatedAt); save(true);
+  }
+  // Де дивитись: лише Київстар ТБ, за даними TMDB для України. Кеш у пам’яті на 6 годин.
+  var availCache = {};
+  var KS = /kyivstar|київстар|киевстар/i;
+  async function kyivstar(mt, tid) {
+    mt = mt === 'tv' ? 'tv' : 'movie'; tid = Math.floor(Number(tid));
+    if (!(tid > 0)) return null;
+    var key = mt + tid, c = availCache[key];
+    if (c && FB.now() - c.at < 21600000) return c.data;
+    var d = await tmdb('/' + mt + '/' + tid + '/watch/providers', {});
+    var ua = d && d.results && d.results.UA || {};
+    var has = function (k) { return (Array.isArray(ua[k]) ? ua[k] : []).some(function (p) { return p && KS.test(String(p.provider_name || '')); }); };
+    var out = { sub: has('flatrate'), free: has('free') || has('ads'), rent: has('rent'), buy: has('buy') };
+    out.found = out.sub || out.free || out.rent || out.buy;
+    availCache[key] = { at: FB.now(), data: out };
+    return out;
+  }
+  function kyivstarText(a) {
+    if (!a) return '';
+    if (!a.found) return 'Немає в Київстар ТБ';
+    if (a.sub) return 'У вашій підписці Київстар ТБ';
+    if (a.free) return 'Безкоштовно в Київстар ТБ';
+    return 'Київстар ТБ: ' + [a.rent ? 'оренда' : '', a.buy ? 'купівля' : ''].filter(Boolean).join(', ');
   }
   async function tmdbImdbId(mt, tid) {
     var d = await tmdb('/' + (mt === 'tv' ? 'tv' : 'movie') + '/' + Math.floor(Number(tid)) + '/external_ids', {});
@@ -971,7 +994,7 @@
     collName: collName, tmdbCollection: tmdbCollection, searchMarathons: searchMarathons, aiMarathon: aiMarathon, saveMarathon: saveMarathon, removeMarathon: removeMarathon, marathons: marathons, marathonOf: marathonOf,
     setArch: setArch, archived: archived, oldCount: oldCount, SORTS_FOR: SORTS_FOR,
     backupNow: backupNow, backupDue: backupDue, autoBackup: autoBackup, listBackups: listBackups, restoreBackup: restoreBackup,
-    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, isToon: isToon, tmdbItem: tmdbItem, toonWest: toonWest, setToonWest: setToonWest, studios: studios, studioDef: studioDef, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
+    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, kyivstar: kyivstar, kyivstarText: kyivstarText, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, isToon: isToon, tmdbItem: tmdbItem, toonWest: toonWest, setToonWest: setToonWest, studios: studios, studioDef: studioDef, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
     getItem: getItem, setStatus: setStatus, setMyRating: setMyRating, setNote: setNote, removeItem: removeItem, restoreItem: restoreItem, refresh: refresh,
     toggleEpisode: toggleEpisode, setSeasonWatched: setSeasonWatched, seasonProgress: seasonProgress, watchedCount: watchedCount,
     list: list, genres: genres, randomPick: randomPick, stats: stats, fmtMinutes: fmtMinutes, SORTS: SORTS, brief: brief,

@@ -508,3 +508,10 @@ button.qin:active{transform:scale(.9)}
 /* v21: фільтр року в «Топ 100» */
 .yrbar{margin:4px 0 12px}
 .yrbar select{max-width:100%}
+
+/* v28: Київстар ТБ */
+.avail{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;margin:6px 0 2px;font-size:14.5px;font-weight:700}
+.avail small{font-weight:500;font-size:12px;color:var(--muted)}
+.avail.yes{color:var(--good)}
+.avail.paid{color:var(--mid)}
+.avail.no,.avail.wait{color:var(--muted);font-weight:600}

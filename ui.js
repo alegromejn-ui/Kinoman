@@ -542,8 +542,11 @@
   function watchRow(sh, lib, it, tr) {
     var x = exOf(sh, lib);
     var trailer = x.trailer ? 'https://www.youtube.com/watch?v=' + x.trailer : 'https://www.youtube.com/results?search_query=' + encodeURIComponent(it.title + ' ' + String(it.year).slice(0, 4) + ' трейлер');
+    var av = sh.avail, line = '';
+    if (av && av.loading) line = '<p class="avail wait">Київстар ТБ: перевіряю…</p>';
+    else if (av && av.data) line = '<p class="avail ' + (av.data.sub || av.data.free ? 'yes' : av.data.found ? 'paid' : 'no') + '">' + esc(F.kyivstarText(av.data)) + '<small>за даними TMDB</small></p>';
     return '<div class="watch"><a class="btn sm trailer" href="' + esc(trailer) + '" target="_blank" rel="noopener">' + ic('play', 'sm') + 'Трейлер</a>' +
-      '</div>';
+      '</div>' + line;
   }
   function nextBlock(sh, lib, it) {
     if (it.type !== 'series') return '';
@@ -812,15 +815,27 @@
     var sh = ui.sheet; if (!sh || !F.tmdbKeyOf()) return; var it = sheetItem(); if (!it) return;
     var lib = F.getItem(it.id);
     var fresh = lib && lib.xv >= 3 && (lib.type !== 'series' || FB.now() - lib.exAt < 86400000);
-    if (!force && (fresh || (sh.extras && (sh.extras.data || sh.extras.loading || sh.extras.error)))) return;
+    if (!force && (fresh || (sh.extras && (sh.extras.data || sh.extras.loading || sh.extras.error)))) { loadAvail(); return; }
     sh.extras = { loading: true, error: null, data: null }; renderSheet();
     try {
       var d = await F.tmdbExtras(it);
       if (ui.sheet !== sh) return;
       sh.extras = { loading: false, error: null, data: d.none ? null : d };
       if (F.getItem(it.id) && !d.none) F.setExtras(it.id, d);
+      setTimeout(loadAvail, 0);
     } catch (e) { if (ui.sheet !== sh) return; sh.extras = { loading: false, error: e, data: null }; }
     renderSheet(); render();
+  }
+  // Київстар ТБ: перевіряється щоразу при відкритті картки (наявність змінюється)
+  async function loadAvail() {
+    var sh = ui.sheet; if (!sh || sh.avail || !F.tmdbKeyOf()) return;
+    var it = sheetItem(); if (!it) return;
+    var lib = F.getItem(it.id), x = exOf(sh, lib);
+    if (!(x.tmdbId > 0)) return;
+    sh.avail = { loading: true }; renderSheet();
+    try { var a = await F.kyivstar(x.mt, x.tmdbId); if (ui.sheet !== sh) return; sh.avail = a ? { data: a } : null; }
+    catch (e) { if (ui.sheet !== sh) return; sh.avail = { error: e }; }
+    renderSheet();
   }
   function syncExtras() {
     var sh = ui.sheet; if (!sh || !sh.extras || !sh.extras.data) return;
