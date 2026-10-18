@@ -827,8 +827,10 @@
     renderSheet(); render();
   }
   // Київстар ТБ: перевіряється щоразу при відкритті картки (наявність змінюється)
+  // Вимкнено у v29: дані TMDB/JustWatch для України не містять Київстар ТБ, тож відповідь завжди була б «немає»
+  var AVAIL_ON = false;
   async function loadAvail() {
-    var sh = ui.sheet; if (!sh || sh.avail || !F.tmdbKeyOf()) return;
+    var sh = ui.sheet; if (!AVAIL_ON || !sh || sh.avail || !F.tmdbKeyOf()) return;
     var it = sheetItem(); if (!it) return;
     var lib = F.getItem(it.id), x = exOf(sh, lib);
     if (!(x.tmdbId > 0)) return;
