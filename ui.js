@@ -190,7 +190,8 @@
     h += '<div class="seg cat-seg" role="group" aria-label="Каталог">' + F.CATS.map(function (t) { return '<button type="button" data-act="hometype" data-mt="' + t[0] + '" aria-pressed="' + (mt === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
     if (!F.tmdbKeyOf()) return h + '<div class="notice">' + ic('film') + '<div><b>Каталог потребує ключ TMDB</b><div class="sub">З ним тут з’являться добірки: що в тренді, що йде в кіно, топи за жанрами й десятиліттями. Ключ безкоштовний, його вставляють у розділі «Ще».</div><p style="margin:10px 0 0"><button class="btn sm" data-act="tab" data-tab="more">Додати ключ</button></p></div></div>';
     var hsChip = '<button type="button" class="chip hs-chip' + (ui.hideSeen ? ' on' : '') + '" data-act="hideseen" aria-pressed="' + ui.hideSeen + '">' + ic('eye', 'sm') + 'Без переглянутого</button>';
-    if (toon) h += '<div class="chips">' + hsChip + '</div>';
+    var westChip = '<button type="button" class="chip west-chip' + (F.toonWest() ? ' on' : '') + '" data-act="west" aria-pressed="' + F.toonWest() + '">Без аніме й Азії</button>';
+    if (toon) h += '<div class="chips">' + hsChip + westChip + '</div>';
     else h += '<div class="chips" role="group" aria-label="Фільтри">' + hsChip + '<span class="cdiv" aria-hidden="true"></span><button class="chip' + (!ui.homeGenre ? ' on' : '') + '" data-act="hgenre" data-g="">Усе</button>' + GENRES.filter(function (g) { return g[0] !== '16' && g[0] !== 'anime'; }).map(function (g) { return '<button class="chip' + (ui.homeGenre === g[0] ? ' on' : '') + '" data-act="hgenre" data-g="' + g[0] + '">' + g[1] + '</button>'; }).join('') + '</div>';
     if (!toon && ui.homeGenre) {
       var gk = 'h:' + mt + ':' + ui.homeGenre, go = discOpts(mt, ui.homeGenre, '', '');
@@ -883,6 +884,7 @@
       case 'moreshelves': ui.cat.shown[ui.homeMt] += 5; render(); break;
       case 'reshelf': { var rs = F.collDefs(ui.homeMt).filter(function (d) { return d.id === el.dataset.id; })[0]; if (rs) { delete ui.cat.sh[rs.id]; loadShelf(rs); paintShelf(rs); } break; }
       case 'coll': openColl(el.dataset.id); break;
+      case 'west': F.setToonWest(!F.toonWest()); ui.cat.sh = {}; ui.cat.token++; render(); break;
       case 'hideseen': ui.hideSeen = !ui.hideSeen; try { localStorage.setItem('kinoman_hide_seen', ui.hideSeen ? '1' : ''); } catch (e) { /* без збереження */ } render(); break;
       case 'catun': {
         var un = F.tmdbItem(el.dataset.mt, el.dataset.tid);

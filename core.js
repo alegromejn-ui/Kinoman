@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v21';
+  var VERSION = 'v22';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -299,9 +299,15 @@
     return L;
   }
   function collDef(id) { var cs = ['movie', 'tv', 'toon']; for (var i = 0; i < cs.length; i++) { var L = collDefs(cs[i]); for (var j = 0; j < L.length; j++) if (L[j].id === id) return L[j]; } return null; }
-  function tmdbItems(d, mt, skip) {
+  // Мультики: за бажанням без аніме та азійської анімації (мова оригіналу ja, zh, ko)
+  var ASIA = ['ja', 'zh', 'cn', 'ko'], west = true;
+  try { west = localStorage.getItem('kinoman_toon_west') !== '0'; } catch (e) { /* без збереження */ }
+  function toonWest() { return west; }
+  function setToonWest(v) { west = !!v; try { localStorage.setItem('kinoman_toon_west', west ? '1' : '0'); } catch (e) { /* без збереження */ } catCache = {}; }
+  function tmdbItems(d, mt, skip, drop) {
     return (Array.isArray(d.results) ? d.results : []).filter(function (r) {
       if (!r || !(r.id > 0) || !imgPath(r.poster_path) || !clean(r.title || r.name)) return false;
+      if (drop && drop.indexOf(r.original_language) >= 0) return false;
       return !(skip && Array.isArray(r.genre_ids) && r.genre_ids.some(function (g) { return skip.indexOf(g) >= 0; }));
     }).map(function (r) {
       var v = Number(r.vote_average); return { tid: Math.floor(r.id), mt: mt, title: clean(r.title || r.name), year: yearOf(r.release_date || r.first_air_date), poster: r.poster_path, vote: v > 0 ? round1(v) : null };
@@ -317,7 +323,7 @@
     var def = collDef(id); if (!def) return { items: [], more: false };
     page = Math.max(1, Math.min(10, Math.floor(Number(page)) || 1)); if (def.limit) page = 1;
     var span = def.limit ? yearSpan(yr) : null;
-    var ck = 'c:' + id + ':' + page + (span ? ':' + span.key : ''), c = catCache[ck]; if (c && FB.now() - c.t < 3600000) return c.res;
+    var drop = def.toon && west ? ASIA : null, ck = 'c:' + id + ':' + page + (span ? ':' + span.key : '') + (drop ? ':w' : ''), c = catCache[ck]; if (c && FB.now() - c.t < 3600000) return c.res;
     var p = ext({ language: 'uk-UA', page: page, include_adult: 'false' }, def.p), disc = /^\/discover\//.test(def.path), skip = def.toon ? null : EXCL[def.mt];
     if (span) {
       p = ext(p, dates(def.mt, span.from, span.to));
@@ -328,14 +334,14 @@
     var res;
     if (def.limit) {
       // «Топ N»: кілька сторінок за раз, з нумерацією місць
-      var first = await tmdb(def.path, ext(p, { page: 1 })), last = Math.min(Math.ceil(def.limit / 20) + 1, Number(first.total_pages) || 1), more = [];
+      var first = await tmdb(def.path, ext(p, { page: 1 })), last = Math.min(Math.ceil(def.limit / 20) + 1 + (drop ? 6 : 0), Number(first.total_pages) || 1), more = [];
       for (var pg = 2; pg <= last; pg++) more.push(tmdb(def.path, ext(p, { page: pg })));
       var ds = [first].concat(await Promise.all(more)), seen = {}, all = [];
-      ds.forEach(function (d) { tmdbItems(d, def.mt, skip).forEach(function (x) { if (!seen[x.tid]) { seen[x.tid] = 1; all.push(x); } }); });
+      ds.forEach(function (d) { tmdbItems(d, def.mt, skip, drop).forEach(function (x) { if (!seen[x.tid]) { seen[x.tid] = 1; all.push(x); } }); });
       res = { items: all.slice(0, def.limit).map(function (x, i) { x.rank = i + 1; return x; }), more: false };
     } else {
       var d = await tmdb(def.path, p);
-      res = { items: tmdbItems(d, def.mt, skip), more: page < Math.min(10, Number(d.total_pages) || 1) };
+      res = { items: tmdbItems(d, def.mt, skip, drop), more: page < Math.min(10, Number(d.total_pages) || 1) };
     }
     catCache[ck] = { t: FB.now(), res: res }; return res;
   }
@@ -951,7 +957,7 @@
     collName: collName, tmdbCollection: tmdbCollection, searchMarathons: searchMarathons, aiMarathon: aiMarathon, saveMarathon: saveMarathon, removeMarathon: removeMarathon, marathons: marathons, marathonOf: marathonOf,
     setArch: setArch, archived: archived, oldCount: oldCount, SORTS_FOR: SORTS_FOR,
     backupNow: backupNow, backupDue: backupDue, autoBackup: autoBackup, listBackups: listBackups, restoreBackup: restoreBackup,
-    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, tmdbItem: tmdbItem, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
+    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, tmdbItem: tmdbItem, toonWest: toonWest, setToonWest: setToonWest, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
     getItem: getItem, setStatus: setStatus, setMyRating: setMyRating, setNote: setNote, removeItem: removeItem, restoreItem: restoreItem, refresh: refresh,
     toggleEpisode: toggleEpisode, setSeasonWatched: setSeasonWatched, seasonProgress: seasonProgress, watchedCount: watchedCount,
     list: list, genres: genres, randomPick: randomPick, stats: stats, fmtMinutes: fmtMinutes, SORTS: SORTS, brief: brief,
