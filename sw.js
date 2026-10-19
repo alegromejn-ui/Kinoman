@@ -1,7 +1,7 @@
 /* Сервісний воркер: каркас додатка відкривається без інтернету.
    Сторінка береться з мережі (щоб приходили оновлення), а коли мережі немає, з кешу.
    Постери з інших адрес кешуються окремо (кеш зображень), щоб вони відкривалися й без інтернету. */
-const VERSION = 'kinoman-v35';
+const VERSION = 'kinoman-v36';
 const IMG = 'kinoman-img';
 const IMG_MAX = 400;
 const IMG_HOSTS = ['m.media-amazon.com', 'image.tmdb.org'];
@@ -25,8 +25,7 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (req.mode === 'navigate') {
-    e.respondWith(fetch(req).then(res => { const copy = res.clone(); caches.open(VERSION).then(c => c.put('index.html', copy)); return res; })
-      .catch(() => caches.match('index.html').then(r => r || caches.match('./'))));
+    e.respondWith(navigate(req));
     return;
   }
   e.respondWith(caches.match(req).then(hit => {
@@ -51,4 +50,27 @@ async function poster(req) {
   } catch (err) {
     return Response.error();
   }
+}
+
+// Відкриття сторінки: інтернет чекаємо максимум 3 с, далі збережена копія (а свіжа підтягнеться фоном).
+// Так додаток відкривається і без мережі, і за дуже слабкого зв’язку, коли запит «висить».
+const NAV_WAIT = 3000;
+function offlinePage() {
+  return new Response('<!doctype html><html lang="uk"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Немає зв’язку</title>' +
+    '<body style="font:16px/1.5 system-ui,sans-serif;background:#111;color:#eee;display:grid;place-items:center;min-height:100vh;margin:0;padding:24px;text-align:center">' +
+    '<div><h1 style="font-size:20px">Немає зв’язку</h1><p>Додаток ще не встиг зберегтися в телефоні. Підключіться до інтернету й відкрийте його ще раз.</p>' +
+    '<p><button onclick="location.reload()" style="font:inherit;padding:10px 18px;border-radius:12px;border:0">Спробувати ще раз</button></p></div></body></html>',
+    { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+}
+function navigate(req) {
+  const cached = () => caches.match('index.html', { ignoreSearch: true }).then(r => r || caches.match('./', { ignoreSearch: true }));
+  const net = fetch(req, { cache: 'no-cache' }).then(res => {
+    if (res && res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put('index.html', copy)); }
+    return res;
+  });
+  const quick = Promise.race([net.catch(() => null), new Promise(r => setTimeout(() => r(null), NAV_WAIT))]);
+  return quick.then(res => {
+    if (res && res.ok) return res;
+    return cached().then(hit => hit || net.then(r => (r && r.ok ? r : offlinePage()), () => offlinePage()));
+  });
 }

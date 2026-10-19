@@ -1266,7 +1266,7 @@
     }, true);
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if ($('#sugg.show')) { hideSugg(); return; } if (ui.sheet) dismiss(); } });
     render();
-    if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () { });
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(function () { });
   }
   window.KinoUI = { ui: ui, render: render, openSheet: openSheet, toast: toast };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
