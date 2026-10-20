@@ -843,10 +843,14 @@
   function closeSheet() { ui.sheet = null; ui.stack = []; renderSheet(); }
   // Повернення до списку (напр. «Топ 100») на те саме місце
   function showColl(c) { ui.sheet = { coll: c }; renderSheet(); var n = $('.sheet', sheetRoot); if (n) n.scrollTop = c.scroll || 0; }
-  function dismiss() {
-    if (ui.sheet && !ui.sheet.coll) for (var i = ui.stack.length - 1; i >= 0; i--) if (ui.stack[i].coll) { var c = ui.stack[i].coll; ui.stack = ui.stack.slice(0, i); showColl(c); return; }
-    closeSheet();
+  // Крок назад: до попередньої картки, списку чи людини. Повертає false, якщо назад нема куди.
+  function goBack() {
+    var prev = ui.stack.pop(); if (!prev) return false;
+    if (prev.coll) showColl(prev.coll); else if (prev.person) openPerson(prev.person); else openSheet(prev.id, prev.brief);
+    return true;
   }
+  // Закриття (хрестик, Esc, натискання поза карткою): на крок назад, а повністю закриває лише перша картка.
+  function dismiss() { if (!goBack()) closeSheet(); }
   function recapBlock(sh, it, lib) {
     if (!F.gemKeyOf() || it.type !== 'series') return '';
     var src = lib || it, opts = F.recapOptions(src); if (!opts.length) return '';
@@ -1063,7 +1067,7 @@
       case 'rehero': { var cur0 = ui.heroId, tries = 0, nx; do { nx = F.randomPick('want'); } while (nx && nx.id === cur0 && F.list('want').length > 1 && ++tries < 20); if (nx) ui.heroId = nx.id; render(); break; }
       case 'sheet-more': closeSheet(); setTab('more'); break;
       case 'extras': loadExtras(true); break;
-      case 'back': { var prev = ui.stack.pop(); if (prev && prev.coll) showColl(prev.coll); else if (prev && prev.person) openPerson(prev.person); else if (prev) openSheet(prev.id, prev.brief); break; }
+      case 'back': goBack(); break;
       case 'person': hideSugg(); pushCurrent(); openPerson({ id: Number(el.dataset.pid), name: el.dataset.name, photo: el.dataset.photo }); break;
       case 'reperson': if (ui.sheet && ui.sheet.person) openPerson(ui.sheet.person); break;
       case 'allknown': if (ui.sheet) { ui.sheet.allKnown = !ui.sheet.allKnown; renderSheet(); } break;
