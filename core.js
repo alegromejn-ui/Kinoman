@@ -694,7 +694,12 @@
     var d = await api({ i: id, Season: n });
     var eps = (Array.isArray(d.Episodes) ? d.Episodes : []).map(function (e) { return { n: parseInt(e.Episode, 10) || 0, title: clean(e.Title), rating: num(e.imdbRating), released: clean(e.Released) }; }).filter(function (e) { return e.n > 0; });
     var it = S.items[id];
-    if (it) { it.seasons[String(n)] = eps; it.updatedAt = stamp(it.updatedAt); save(); }
+    if (it) {
+      // Не затираємо повніший кеш неповною відповіддю OMDb
+      var old = it.seasons[String(n)];
+      if (old && old.length && eps.length < old.length) return old;
+      it.seasons[String(n)] = eps; it.updatedAt = stamp(it.updatedAt); save();
+    }
     return eps;
   }
   async function testKey() {

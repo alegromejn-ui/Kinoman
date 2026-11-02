@@ -833,7 +833,7 @@
     var lib = F.getItem(id);
     ui.sheet = { id: id, brief: brief || (lib ? F.brief(lib) : null), item: lib || detCache[id] || null, error: null, season: 0, tmp: {}, loadingSeason: 0, seasonError: null, refreshing: false };
     renderSheet();
-    if (!ui.sheet.item) await loadSheetItem(); else loadExtras(false);
+    if (!ui.sheet.item) await loadSheetItem(); else { loadExtras(false); autoRefreshRatings(ui.sheet, lib); }
   }
   async function loadSheetItem() {
     var sh = ui.sheet; if (!sh) return; sh.error = null;
@@ -928,13 +928,35 @@
   // Відмічена серія в «Обраних» означає, що серіал уже дивляться
   function startWatching(id) { var l = F.getItem(id); if (l && l.status === 'want' && F.watchedCount(l)) F.setStatus(l, 'watching'); }
   function ensureInLibrary(st) { var sh = ui.sheet, it = sheetItem(); if (!it) return null; return F.setStatus(it, st || 'want'); }
+  // Сезон у кеші застарів: серій менше, ніж за даними TMDB, або в когось ще немає рейтингу
+  function seasonStale(lib, n, eps) {
+    if (!eps || !eps.length) return true;
+    var exp = lib && lib.seasonEps && lib.seasonEps[n]; if (exp && eps.length < exp) return true;
+    return eps.some(function (e) { return e.rating == null; });
+  }
   async function loadSeasonNow(n) {
     var sh = ui.sheet; if (!sh) return; sh.season = n; sh.seasonError = null;
-    var lib = F.getItem(sh.id);
-    if ((lib && lib.seasons[String(n)]) || sh.tmp[n]) { renderSheet(); return; }
-    sh.loadingSeason = n; renderSheet();
+    var lib = F.getItem(sh.id); sh.fresh = sh.fresh || {};
+    var cached = (lib && lib.seasons[String(n)]) || sh.tmp[n];
+    if (cached && (sh.fresh[n] || !seasonStale(lib, n, cached))) { renderSheet(); return; }
+    if (cached) {
+      // Показуємо кеш одразу, а свіжі дані підтягуємо у фоні (раз за відкриття картки)
+      sh.fresh[n] = 1; renderSheet();
+      try { var up = await F.loadSeason(sh.id, n); if (ui.sheet === sh) { sh.tmp[n] = up; renderSheet(); } } catch (e) { /* лишаємо кеш */ }
+      return;
+    }
+    sh.loadingSeason = n; sh.fresh[n] = 1; renderSheet();
     try { var eps = await F.loadSeason(sh.id, n); if (ui.sheet === sh) { sh.tmp[n] = eps; sh.loadingSeason = 0; renderSheet(); } }
     catch (e) { if (ui.sheet === sh) { sh.loadingSeason = 0; sh.seasonError = { n: n, e: e }; renderSheet(); } }
+  }
+  // Рейтинги й кількість сезонів у бібліотеці тихо оновлюємо при відкритті картки, якщо дані старші за 3 доби
+  var autoRef = {};
+  async function autoRefreshRatings(sh, lib) {
+    if (!lib || autoRef[lib.id]) return;
+    var age = Date.now() - (lib.fetchedAt || 0), none = lib.ratings.imdb == null;
+    if (age < (none ? 21600000 : 259200000)) return;
+    autoRef[lib.id] = 1;
+    try { await F.refresh(lib.id); if (ui.sheet === sh) renderSheet(); render(); } catch (e) { /* без шуму: ліміт чи мережа */ }
   }
 
   // ---------- Вивід ----------
