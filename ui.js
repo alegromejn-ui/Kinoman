@@ -406,6 +406,8 @@
     var oc = status === 'want' ? F.oldCount('want') : 0;
     var twoN = F.list(status, { two: true }).length;
     if (twoN || f.two) h += '<p class="hs"><button type="button" class="chip' + (f.two ? ' on' : '') + '" data-act="twof" aria-pressed="' + !!f.two + '">' + ic('heart', 'sm') + 'Для двох ' + twoN + '</button></p>';
+    var famN = F.list(status, { fam: true }).length;
+    if (famN || f.fam) h += '<p class="hs"><button type="button" class="chip' + (f.fam ? ' on' : '') + '" data-act="famf" aria-pressed="' + !!f.fam + '">' + ic('home', 'sm') + 'Сімейні ' + famN + '</button></p>';
     if (oc || f.old) h += '<p class="hs"><button type="button" class="chip' + (f.old ? ' on' : '') + '" data-act="oldf" aria-pressed="' + !!f.old + '">' + ic('clock', 'sm') + 'Давно лежить ' + oc + '</button></p>';
     var gs = F.genres(status);
     if (gs.length > 1) h += '<div class="chips" role="group" aria-label="Жанри"><button class="chip' + (!f.genre ? ' on' : '') + '" data-act="genre" data-genre="">Усі жанри</button>' + gs.slice(0, 14).map(function (g) { return '<button class="chip' + (f.genre === g.name ? ' on' : '') + '" data-act="genre" data-genre="' + esc(g.name) + '">' + esc(F.genreUk(g.name)) + ' ' + g.count + '</button>'; }).join('') + '</div>';
@@ -594,7 +596,7 @@
   function colBlock(lib) {
     if (!lib) return '';
     var cols = F.colList();
-    return '<h2>Добірки</h2><div class="chips cols" role="group" aria-label="Добірки"><button class="chip two' + (lib.two ? ' on' : '') + '" data-act="togtwo" aria-pressed="' + !!lib.two + '">' + ic('heart', 'sm') + 'Для двох</button>' + cols.map(function (c) { var on = lib.cols.indexOf(c.id) >= 0; return '<button class="chip' + (on ? ' on' : '') + '" data-act="togcol" data-c="' + c.id + '" aria-pressed="' + on + '">' + (on ? ic('check', 'sm') : '') + esc(c.name) + '</button>'; }).join('') + '<button class="chip" data-act="newcol">' + ic('plus', 'sm') + 'Нова добірка</button></div>';
+    return '<h2>Добірки</h2><div class="chips cols" role="group" aria-label="Добірки"><button class="chip two' + (lib.two ? ' on' : '') + '" data-act="togtwo" aria-pressed="' + !!lib.two + '">' + ic('heart', 'sm') + 'Для двох</button><button class="chip fam' + (lib.fam ? ' on' : '') + '" data-act="togfam" aria-pressed="' + !!lib.fam + '">' + ic('home', 'sm') + 'Сімейні</button>' + cols.map(function (c) { var on = lib.cols.indexOf(c.id) >= 0; return '<button class="chip' + (on ? ' on' : '') + '" data-act="togcol" data-c="' + c.id + '" aria-pressed="' + on + '">' + (on ? ic('check', 'sm') : '') + esc(c.name) + '</button>'; }).join('') + '<button class="chip" data-act="newcol">' + ic('plus', 'sm') + 'Нова добірка</button></div>';
   }
   function personHtml(sh) {
     var p = sh.person, d = sh.pdata;
@@ -985,6 +987,8 @@
       case 'qh': { ui.q = el.dataset.q || ''; var qi = $('#q'); if (qi) qi.value = ui.q; doSearch(false); break; }
       case 'qhclear': F.clearQueries(); render(); break;
       case 'recap': loadRecap(Number(el.dataset.s) || 1, Number(el.dataset.e) || 0); break;
+      case 'famf': { var ff = ui.lists[ui.tab]; if (ff) { ff.fam = !ff.fam; render(); } break; }
+      case 'togfam': { var lf2 = ui.sheet && F.getItem(ui.sheet.id); if (lf2) { var on3 = F.toggleFam(lf2.id); toast(on3 ? 'Позначено «Сімейні»' : 'Прибрано з «Сімейні»'); renderSheet(); render(); } break; }
       case 'oldf': { var lf = ui.lists[ui.tab]; if (lf) { lf.old = !lf.old; render(); } break; }
       case 'arch': {
         var aid = el.dataset.id || (ui.sheet && ui.sheet.id), on = !!el.dataset.on, ai0 = F.getItem(aid); if (!ai0) break;
@@ -1112,7 +1116,7 @@
       case 'togcol': { var lc = ui.sheet && F.getItem(ui.sheet.id); if (lc) { F.toggleCol(lc.id, el.dataset.c); renderSheet(); } break; }
       case 'newcol': {
         var nm = window.prompt('Назва добірки, наприклад «На вечір удвох»'); if (!nm || !nm.trim()) return;
-        var cid = F.addCol(nm); var lc2 = ui.sheet && F.getItem(ui.sheet.id); if (cid && lc2) F.toggleCol(lc2.id, cid); else if (!cid && lc2 && /^для\s*двох$/i.test(String(nm).trim()) && !lc2.two) F.toggleTwo(lc2.id); renderSheet(); render(); break;
+        var cid = F.addCol(nm); var lc2 = ui.sheet && F.getItem(ui.sheet.id); if (cid && lc2) F.toggleCol(lc2.id, cid); else if (!cid && lc2 && /^для\s*двох$/i.test(String(nm).trim()) && !lc2.two) F.toggleTwo(lc2.id); else if (!cid && lc2 && /^сімейні$/i.test(String(nm).trim()) && !lc2.fam) F.toggleFam(lc2.id); renderSheet(); render(); break;
       }
       case 'rencol': { var cur1 = F.colList().filter(function (c) { return c.id === el.dataset.c; })[0]; if (!cur1) return; var nn = window.prompt('Нова назва добірки', cur1.name); if (nn && nn.trim()) F.renameCol(cur1.id, nn); render(); break; }
       case 'delcol': { var cur2 = F.colList().filter(function (c) { return c.id === el.dataset.c; })[0]; if (!cur2) return; if (window.confirm('Видалити добірку «' + cur2.name + '»? Фільми лишаться у ваших списках.')) F.removeCol(cur2.id); render(); break; }

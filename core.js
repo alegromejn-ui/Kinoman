@@ -51,7 +51,7 @@
       titleUk: String(x.titleUk || '').slice(0, 200), plotUk: String(x.plotUk || '').slice(0, 2500),
       trailer: /^[\w-]{11}$/.test(String(x.trailer || '')) ? String(x.trailer) : '', seasonEps: cleanSeasonEps(x.seasonEps), nextAir: cleanNextAir(x.nextAir), lastAir: cleanNextAir(x.lastAir), planAt: /^\d{4}-\d{2}-\d{2}$/.test(String(x.planAt || '')) ? String(x.planAt) : '', tvStatus: String(x.tvStatus || '').slice(0, 40), arch: !!x.arch, tcoll: x.tcoll && Number(x.tcoll.id) > 0 && String(x.tcoll.name || '').trim() ? { id: Math.floor(Number(x.tcoll.id)), name: String(x.tcoll.name).trim().slice(0, 80) } : null, seasonAir: cleanSeasonAir(x.seasonAir), doneS: Math.max(0, Math.min(100, Math.floor(Number(x.doneS)) || 0)),
       xv: Number(x.xv) || 0, exAt: Number(x.exAt) || 0, cols: Array.isArray(x.cols) ? x.cols.map(String).filter(function (c) { return /^c[\w]{1,24}$/.test(c); }).slice(0, 50) : [],
-      two: !!x.two, status: x.status === 'seen' ? 'seen' : x.status === 'watching' ? 'watching' : 'want', myRating: my, note: String(x.note || '').slice(0, 1000),
+      two: !!x.two, fam: !!x.fam, status: x.status === 'seen' ? 'seen' : x.status === 'watching' ? 'watching' : 'want', myRating: my, note: String(x.note || '').slice(0, 1000),
       addedAt: Number(x.addedAt) || 0, seenAt: Number(x.seenAt) || 0, updatedAt: Number(x.updatedAt) || 0, fetchedAt: Number(x.fetchedAt) || 0,
       seasons: seasons, watched: watched
     };
@@ -91,12 +91,14 @@
     try { localStorage.setItem(KEY, JSON.stringify(S)); saveFailed = false; } catch (e) { saveFailed = true; }
     if (!silent) emit();
   }
-  // Власна добірка «Для двох» тепер вбудована: переносимо позначки й прибираємо дубль
+  // Власні добірки «Для двох» і «Сімейні» вбудовані: переносимо позначки й прибираємо дубль
   function mergeTwoCol() {
     var n = 0;
     Object.keys(S.cols).forEach(function (cid) {
-      var c = S.cols[cid]; if (!c || c.del || !/^для\s*двох$/i.test(String(c.name).trim())) return;
-      Object.keys(S.items).forEach(function (k) { var it = S.items[k], i = it.cols.indexOf(cid); if (i >= 0) { it.cols.splice(i, 1); it.two = true; it.updatedAt = stamp(it.updatedAt); n++; } });
+      var c = S.cols[cid]; if (!c || c.del) return;
+      var nm = String(c.name).trim(), flag = /^для\s*двох$/i.test(nm) ? 'two' : /^сімейні$/i.test(nm) ? 'fam' : '';
+      if (!flag) return;
+      Object.keys(S.items).forEach(function (k) { var it = S.items[k], i = it.cols.indexOf(cid); if (i >= 0) { it.cols.splice(i, 1); it[flag] = true; it.updatedAt = stamp(it.updatedAt); n++; } });
       c.del = true; c.upd = stamp(c.upd);
     });
     return n;
@@ -799,6 +801,7 @@
     if (o.type === 'movie' || o.type === 'series') arr = arr.filter(function (it) { return it.type === o.type && !isToon(it); });
     if (o.type === 'toon') arr = arr.filter(isToon);
     if (o.two) arr = arr.filter(function (it) { return it.two; });
+    if (o.fam) arr = arr.filter(function (it) { return it.fam; });
     if (o.genre) arr = arr.filter(function (it) { return it.genre.indexOf(o.genre) >= 0; });
     if (o.time) arr = arr.filter(function (it) { var m = it.runtime; if (!m) return false; return o.time === '90' ? m <= 90 : o.time === '120' ? m > 90 && m <= 120 : m > 120; });
     var cmp = {
@@ -833,10 +836,11 @@
 
   // ---------- Добірки ----------
   function colList() { return Object.keys(S.cols).filter(function (k) { return !S.cols[k].del; }).map(function (k) { return { id: k, name: S.cols[k].name, at: S.cols[k].at }; }).sort(function (a, b) { return a.at - b.at; }); }
-  function addCol(name) { name = String(name || '').trim().slice(0, 40); if (!name || /^для\s*двох$/i.test(name)) return null; var id = 'c' + FB.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); var t = FB.now(); S.cols[id] = { name: name, at: t, upd: t, del: false }; save(); return id; }
+  function addCol(name) { name = String(name || '').trim().slice(0, 40); if (!name || /^(для\s*двох|сімейні)$/i.test(name)) return null; var id = 'c' + FB.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); var t = FB.now(); S.cols[id] = { name: name, at: t, upd: t, del: false }; save(); return id; }
   function renameCol(id, name) { name = String(name || '').trim().slice(0, 40); var c = S.cols[id]; if (!c || !name) return; c.name = name; c.upd = stamp(c.upd); save(); }
   function removeCol(id) { var c = S.cols[id]; if (!c) return; c.del = true; c.upd = stamp(c.upd); Object.keys(S.items).forEach(function (k) { var it = S.items[k], i = it.cols.indexOf(id); if (i >= 0) { it.cols.splice(i, 1); it.updatedAt = stamp(it.updatedAt); } }); save(); }
   function toggleTwo(itemId) { var it = S.items[itemId]; if (!it) return false; it.two = !it.two; it.updatedAt = stamp(it.updatedAt); save(); return it.two; }
+  function toggleFam(itemId) { var it = S.items[itemId]; if (!it) return false; it.fam = !it.fam; it.updatedAt = stamp(it.updatedAt); save(); return it.fam; }
   // Коротка рецензія від Gemini без спойлерів. Кешується в цьому телефоні (не синхронізується).
   function reviewOf(id) { var r = S.rev && S.rev[id]; return r || null; }
   async function aiReview(it, force) {
@@ -1158,7 +1162,7 @@
   Object.assign(FB, {
     VERSION: VERSION, init: init, on: on, save: save, isSaveFailed: function () { return saveFailed; },
     newEpisodes: newEpisodes, newSeasons: newSeasons, hasNewSeason: hasNewSeason, skipSeason: skipSeason, markEpisodeSeen: markEpisodeSeen, upcoming: upcoming, refreshSeries: refreshSeries, duoPick: duoPick, records: records, ymd: ymd,
-    discover: discover, person: person, advise: advise, findTmdb: findTmdb, colList: colList, addQuery: addQuery, queries: queries, clearQueries: clearQueries, status: status, recapOptions: recapOptions, recapOf: recapOf, aiRecap: aiRecap, imdbFor: imdbFor, isNope: isNope, setNope: setNope, nopeCount: nopeCount, clearNope: clearNope, toggleTwo: toggleTwo, aiReview: aiReview, reviewOf: reviewOf, addCol: addCol, renameCol: renameCol, removeCol: removeCol, toggleCol: toggleCol, colItems: colItems, nextForMe: nextForMe, epCode: epCode, yearStats: yearStats, syncOf: syncOf, setSync: setSync, syncNow: syncNow, mergeIn: mergeIn,
+    discover: discover, person: person, advise: advise, findTmdb: findTmdb, colList: colList, addQuery: addQuery, queries: queries, clearQueries: clearQueries, status: status, recapOptions: recapOptions, recapOf: recapOf, aiRecap: aiRecap, imdbFor: imdbFor, isNope: isNope, setNope: setNope, nopeCount: nopeCount, clearNope: clearNope, toggleTwo: toggleTwo, toggleFam: toggleFam, aiReview: aiReview, reviewOf: reviewOf, addCol: addCol, renameCol: renameCol, removeCol: removeCol, toggleCol: toggleCol, colItems: colItems, nextForMe: nextForMe, epCode: epCode, yearStats: yearStats, syncOf: syncOf, setSync: setSync, syncNow: syncNow, mergeIn: mergeIn,
     collName: collName, tmdbCollection: tmdbCollection, searchMarathons: searchMarathons, aiMarathon: aiMarathon, saveMarathon: saveMarathon, removeMarathon: removeMarathon, marathons: marathons, marathonOf: marathonOf,
     setArch: setArch, archived: archived, oldCount: oldCount, SORTS_FOR: SORTS_FOR,
     backupNow: backupNow, backupDue: backupDue, autoBackup: autoBackup, listBackups: listBackups, restoreBackup: restoreBackup,

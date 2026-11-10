@@ -519,7 +519,7 @@ button.qin:active{transform:scale(.9)}
 /* v30: рецензія ШІ, «Для двох» */
 .review{margin:0;line-height:1.55;padding:12px 14px;border-radius:14px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}
 .review.wait,.review.none{color:var(--muted);display:flex;gap:8px;align-items:center}
-.chip.two.on{background:var(--accent);color:var(--on-accent);box-shadow:none}
+.chip.two.on,.chip.fam.on{background:var(--accent);color:var(--on-accent);box-shadow:none}
 .chips.cols{height:auto;padding-top:0;align-items:center}
 .badge span.tm{font-weight:700;font-size:11px}
 .tile .badge span.imdb,.tile .badge span.tm{padding:0 7px;font-size:11px;letter-spacing:-.01em}
