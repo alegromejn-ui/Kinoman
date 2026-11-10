@@ -802,6 +802,9 @@
     if (o.type === 'toon') arr = arr.filter(isToon);
     if (o.two) arr = arr.filter(function (it) { return it.two; });
     if (o.fam) arr = arr.filter(function (it) { return it.fam; });
+    if (o.grp) arr = arr.filter(function (it) { return it.two || it.fam; });
+    // o.hide: не показувати позначені «Для двох» і «Сімейні» (лише у відображенні; статистика й сповіщення бачать усе)
+    if (o.hide && !o.two && !o.fam && !o.grp) arr = arr.filter(function (it) { return !it.two && !it.fam; });
     if (o.genre) arr = arr.filter(function (it) { return it.genre.indexOf(o.genre) >= 0; });
     if (o.time) arr = arr.filter(function (it) { var m = it.runtime; if (!m) return false; return o.time === '90' ? m <= 90 : o.time === '120' ? m > 90 && m <= 120 : m > 120; });
     var cmp = {
@@ -816,8 +819,8 @@
     }[o.sort] || function (a, b) { return b.addedAt - a.addedAt; };
     return arr.sort(cmp);
   }
-  function genres(status) {
-    var m = {}; list(status).forEach(function (it) { it.genre.forEach(function (g) { m[g] = (m[g] || 0) + 1; }); });
+  function genres(status, o) {
+    var m = {}; list(status, o).forEach(function (it) { it.genre.forEach(function (g) { m[g] = (m[g] || 0) + 1; }); });
     return Object.keys(m).sort(function (a, b) { return m[b] - m[a] || a.localeCompare(b); }).map(function (g) { return { name: g, count: m[g] }; });
   }
   function randomPick(status, o) { var a = list(status, o); return a.length ? a[Math.floor(Math.random() * a.length)] : null; }
@@ -840,6 +843,9 @@
   function renameCol(id, name) { name = String(name || '').trim().slice(0, 40); var c = S.cols[id]; if (!c || !name) return; c.name = name; c.upd = stamp(c.upd); save(); }
   function removeCol(id) { var c = S.cols[id]; if (!c) return; c.del = true; c.upd = stamp(c.upd); Object.keys(S.items).forEach(function (k) { var it = S.items[k], i = it.cols.indexOf(id); if (i >= 0) { it.cols.splice(i, 1); it.updatedAt = stamp(it.updatedAt); } }); save(); }
   function toggleTwo(itemId) { var it = S.items[itemId]; if (!it) return false; it.two = !it.two; it.updatedAt = stamp(it.updatedAt); save(); return it.two; }
+  var hideGrp = false; try { hideGrp = localStorage.getItem('kinoman_hidegrp') === '1'; } catch (e) { hideGrp = false; }
+  function hideGrpOn() { return hideGrp; }
+  function setHideGrp(v) { hideGrp = !!v; try { localStorage.setItem('kinoman_hidegrp', hideGrp ? '1' : '0'); } catch (e) { /* ne zberezheno */ } return hideGrp; }
   function toggleFam(itemId) { var it = S.items[itemId]; if (!it) return false; it.fam = !it.fam; it.updatedAt = stamp(it.updatedAt); save(); return it.fam; }
   // Коротка рецензія від Gemini без спойлерів. Кешується в цьому телефоні (не синхронізується).
   function reviewOf(id) { var r = S.rev && S.rev[id]; return r || null; }
@@ -1162,7 +1168,7 @@
   Object.assign(FB, {
     VERSION: VERSION, init: init, on: on, save: save, isSaveFailed: function () { return saveFailed; },
     newEpisodes: newEpisodes, newSeasons: newSeasons, hasNewSeason: hasNewSeason, skipSeason: skipSeason, markEpisodeSeen: markEpisodeSeen, upcoming: upcoming, refreshSeries: refreshSeries, duoPick: duoPick, records: records, ymd: ymd,
-    discover: discover, person: person, advise: advise, findTmdb: findTmdb, colList: colList, addQuery: addQuery, queries: queries, clearQueries: clearQueries, status: status, recapOptions: recapOptions, recapOf: recapOf, aiRecap: aiRecap, imdbFor: imdbFor, isNope: isNope, setNope: setNope, nopeCount: nopeCount, clearNope: clearNope, toggleTwo: toggleTwo, toggleFam: toggleFam, aiReview: aiReview, reviewOf: reviewOf, addCol: addCol, renameCol: renameCol, removeCol: removeCol, toggleCol: toggleCol, colItems: colItems, nextForMe: nextForMe, epCode: epCode, yearStats: yearStats, syncOf: syncOf, setSync: setSync, syncNow: syncNow, mergeIn: mergeIn,
+    discover: discover, person: person, advise: advise, findTmdb: findTmdb, colList: colList, addQuery: addQuery, queries: queries, clearQueries: clearQueries, status: status, recapOptions: recapOptions, recapOf: recapOf, aiRecap: aiRecap, imdbFor: imdbFor, isNope: isNope, setNope: setNope, nopeCount: nopeCount, clearNope: clearNope, toggleTwo: toggleTwo, toggleFam: toggleFam, hideGrpOn: hideGrpOn, setHideGrp: setHideGrp, aiReview: aiReview, reviewOf: reviewOf, addCol: addCol, renameCol: renameCol, removeCol: removeCol, toggleCol: toggleCol, colItems: colItems, nextForMe: nextForMe, epCode: epCode, yearStats: yearStats, syncOf: syncOf, setSync: setSync, syncNow: syncNow, mergeIn: mergeIn,
     collName: collName, tmdbCollection: tmdbCollection, searchMarathons: searchMarathons, aiMarathon: aiMarathon, saveMarathon: saveMarathon, removeMarathon: removeMarathon, marathons: marathons, marathonOf: marathonOf,
     setArch: setArch, archived: archived, oldCount: oldCount, SORTS_FOR: SORTS_FOR,
     backupNow: backupNow, backupDue: backupDue, autoBackup: autoBackup, listBackups: listBackups, restoreBackup: restoreBackup,

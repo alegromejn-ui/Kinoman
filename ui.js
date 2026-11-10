@@ -47,11 +47,12 @@
     else acts = [['want', 'plus', 'В обране'], ['watching', 'play', 'Дивлюсь'], ['seen', 'eye', 'Бачив']].map(function (c) { return '<button class="chip" data-act="quick" data-st="' + c[0] + '" data-id="' + r.id + '"' + (busy ? ' disabled' : '') + '>' + ic(c[1], 'sm') + c[2] + '</button>'; }).join('');
     return '<div class="row glow" style="--h:' + hue(r.id) + '"><button class="open" data-act="open" data-id="' + r.id + '">' + posterHtml(r.poster, r.title) + '<span class="txt"><span class="t">' + esc(r.title) + '</span><span class="m">' + esc(typeLabel(r.type)) + (r.year ? ', ' + esc(r.year) : '') + '</span></span></button><div class="acts">' + acts + '</div></div>';
   }
+  function HD(o) { var r = {}; Object.keys(o || {}).forEach(function (k) { r[k] = o[k]; }); if (F.hideGrpOn()) r.hide = true; return r; }
   function featureHtml() {
     if (ui.loading || ui.results.length || ui.searched || ui.q.trim()) return '';
-    var want = F.list('want'); if (!want.length) return '';
+    var want = F.list('want', HD()); if (!want.length) return '';
     var it = ui.heroId && F.getItem(ui.heroId) && F.getItem(ui.heroId).status === 'want' ? F.getItem(ui.heroId) : null;
-    if (!it) { it = F.randomPick('want'); ui.heroId = it.id; }
+    if (!it) { it = F.randomPick('want', HD()); ui.heroId = it.id; }
     var r = it.ratings, pills = '';
     if (r.imdb != null) pills += '<span class="pill">IMDb ' + r.imdb.toFixed(1) + '</span>';
     if (r.rt != null) pills += '<span class="pill rt' + (r.rt >= 60 ? ' good' : '') + '">' + r.rt + '%</span>';
@@ -393,10 +394,10 @@
     return '<button class="card glow"' + st + ' data-act="open" data-id="' + it.id + '"><span class="poster"><span class="ph">' + esc(it.title) + '</span>' + img + '<span class="badge">' + b + '</span><span class="over"><span class="name">' + nm + '</span><span class="yr">' + esc(it.year) + '</span>' + (nx ? '<span class="nx">Далі ' + F.epCode(nx) + '</span>' : '') + '</span></span></button>';
   }
   function renderList(status) {
-    var f = ui.lists[status], all = F.list(status), items = F.list(status, f);
+    var f = ui.lists[status], total = F.list(status).length, all = F.list(status, HD()), items = F.list(status, HD(f));
     var avg = status === 'seen' ? F.stats().avgMine : null;
     var h = '<div class="page-h big"><div><h1>' + NAMES[status] + '</h1><p class="sub">' + all.length + ' ' + (status !== 'seen' ? plural(all.length, 'позиція', 'позиції', 'позицій') : plural(all.length, 'фільм і серіал', 'фільми й серіали', 'фільмів і серіалів')) + (avg != null ? ', середня оцінка ' + avg.toFixed(1) : '') + '</p></div>' + (status === 'want' && all.length > 1 ? '<span class="hbtns"><button class="btn soft sm" data-act="duo">' + ic('heart', 'sm') + 'Вдвох</button><button class="btn soft sm" data-act="random">' + ic('shuffle', 'sm') + 'Що подивитись?</button></span>' : '') + '</div>';
-    if (!all.length) {
+    if (!total) {
       return h + (status === 'want' ? emptyHtml('heart', 'Тут буде ваш список', 'Знайдіть фільм і натисніть «В обране», щоб не забути його.', '<p><button class="btn" data-act="tab" data-tab="search">Знайти фільм</button></p>')
         : status === 'watching' ? emptyHtml('play', 'Зараз нічого не дивитесь', 'Натисніть «Дивлюсь» у картці фільму чи серіалу. Для серіалів тут буде видно, скільки серій вже позаду.', '<p><button class="btn" data-act="tab" data-tab="search">Знайти фільм</button></p>')
         : emptyHtml('eye', 'Поки нічого не переглянуто', 'Позначайте фільми як переглянуті й ставте свої оцінки від 1 до 10.', '<p><button class="btn" data-act="tab" data-tab="search">Знайти фільм</button></p>'));
@@ -408,8 +409,10 @@
     if (twoN || f.two) h += '<p class="hs"><button type="button" class="chip' + (f.two ? ' on' : '') + '" data-act="twof" aria-pressed="' + !!f.two + '">' + ic('heart', 'sm') + 'Для двох ' + twoN + '</button></p>';
     var famN = F.list(status, { fam: true }).length;
     if (famN || f.fam) h += '<p class="hs"><button type="button" class="chip' + (f.fam ? ' on' : '') + '" data-act="famf" aria-pressed="' + !!f.fam + '">' + ic('home', 'sm') + 'Сімейні ' + famN + '</button></p>';
+    var grpN = F.list(status, { grp: true }).length;
+    if (grpN || F.hideGrpOn()) h += '<p class="hs"><button type="button" class="chip' + (F.hideGrpOn() ? ' on' : '') + '" data-act="hidegrp" aria-pressed="' + F.hideGrpOn() + '">' + ic('eyeoff', 'sm') + 'Сховати «Для двох» і «Сімейні»</button></p>';
     if (oc || f.old) h += '<p class="hs"><button type="button" class="chip' + (f.old ? ' on' : '') + '" data-act="oldf" aria-pressed="' + !!f.old + '">' + ic('clock', 'sm') + 'Давно лежить ' + oc + '</button></p>';
-    var gs = F.genres(status);
+    var gs = F.genres(status, (f.two || f.fam) ? {} : HD());
     if (gs.length > 1) h += '<div class="chips" role="group" aria-label="Жанри"><button class="chip' + (!f.genre ? ' on' : '') + '" data-act="genre" data-genre="">Усі жанри</button>' + gs.slice(0, 14).map(function (g) { return '<button class="chip' + (f.genre === g.name ? ' on' : '') + '" data-act="genre" data-genre="' + esc(g.name) + '">' + esc(F.genreUk(g.name)) + ' ' + g.count + '</button>'; }).join('') + '</div>';
     if (!items.length) return h + emptyHtml('film', 'За цим фільтром порожньо', 'Змініть тип, жанр чи час.');
     return h + '<div class="' + (status === 'seen' ? 'stubs' : 'grid') + '">' + items.map(function (it, i) { var c = cardHtml(it, i, status); return status === 'watching' ? '<div class="cardwrap">' + c + '<button class="fin" data-act="finish" data-id="' + it.id + '" aria-label="Завершив: ' + esc(it.titleUk || it.title) + '">' + ic('check', 'sm') + 'Завершив</button></div>' : c; }).join('') + '</div>';
@@ -734,7 +737,7 @@
   }
 
   function openWheel() {
-    var all = F.list('want', ui.lists.want).slice(); for (var i = all.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = all[i]; all[i] = all[j]; all[j] = t; }
+    var all = F.list('want', HD(ui.lists.want)).slice(); for (var i = all.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = all[i]; all[i] = all[j]; all[j] = t; }
     ui.sheet = { wheel: { items: all.slice(0, 10), from: 0, spinning: false, pick: null } }; ui.stack = []; renderSheet();
   }
   function spinWheel() {
@@ -987,6 +990,7 @@
       case 'qh': { ui.q = el.dataset.q || ''; var qi = $('#q'); if (qi) qi.value = ui.q; doSearch(false); break; }
       case 'qhclear': F.clearQueries(); render(); break;
       case 'recap': loadRecap(Number(el.dataset.s) || 1, Number(el.dataset.e) || 0); break;
+      case 'hidegrp': { F.setHideGrp(!F.hideGrpOn()); toast(F.hideGrpOn() ? 'Сховано «Для двох» і «Сімейні»' : 'Знову показуємо все'); render(); break; }
       case 'famf': { var ff = ui.lists[ui.tab]; if (ff) { ff.fam = !ff.fam; render(); } break; }
       case 'togfam': { var lf2 = ui.sheet && F.getItem(ui.sheet.id); if (lf2) { var on3 = F.toggleFam(lf2.id); toast(on3 ? 'Позначено «Сімейні»' : 'Прибрано з «Сімейні»'); renderSheet(); render(); } break; }
       case 'oldf': { var lf = ui.lists[ui.tab]; if (lf) { lf.old = !lf.old; render(); } break; }
@@ -1090,7 +1094,7 @@
         if (becameSeen && ui.sheet) { ui.sheet.stamp = true; renderSheet(); }
         break;
       }
-      case 'rehero': { var cur0 = ui.heroId, tries = 0, nx; do { nx = F.randomPick('want'); } while (nx && nx.id === cur0 && F.list('want').length > 1 && ++tries < 20); if (nx) ui.heroId = nx.id; render(); break; }
+      case 'rehero': { var cur0 = ui.heroId, tries = 0, nx; do { nx = F.randomPick('want', HD()); } while (nx && nx.id === cur0 && F.list('want', HD()).length > 1 && ++tries < 20); if (nx) ui.heroId = nx.id; render(); break; }
       case 'sheet-more': closeSheet(); setTab('more'); break;
       case 'extras': loadExtras(true); break;
       case 'back': goBack(); break;
@@ -1202,7 +1206,7 @@
       case 'ltype': ui.lists[ui.tab].type = el.dataset.type; render(); break;
       case 'genre': ui.lists[ui.tab].genre = el.dataset.genre; render(); break;
       case 'random': {
-        if (F.list('want', ui.lists.want).length >= 2) openWheel(); else { var p = F.randomPick('want', ui.lists.want); if (p) openSheet(p.id); } break;
+        if (F.list('want', HD(ui.lists.want)).length >= 2) openWheel(); else { var p = F.randomPick('want', HD(ui.lists.want)); if (p) openSheet(p.id); } break;
       }
       case 'testkey': {
         ui.keyMsg = { ok: true, text: 'Перевіряємо…' }; render();
