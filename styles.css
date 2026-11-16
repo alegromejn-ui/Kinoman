@@ -583,6 +583,15 @@ input[type=text],input[type=search],input[type=password],textarea,select{border-
 .body>h2{font:800 25px/1 var(--poster);letter-spacing:.02em;text-transform:uppercase}
 .score{border-radius:14px}
 .ticket{border-radius:18px}
+/* Колекція: з ким дивитись + один рядок фільтрів */
+.who{display:flex;gap:8px;margin:0 -16px 14px;padding:0 16px;overflow-x:auto;scrollbar-width:none}
+.who::-webkit-scrollbar{display:none}
+.who button{flex:none;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-radius:12px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);font-weight:700;font-size:15px;color:var(--ink);white-space:nowrap;transition:background .2s,color .2s}
+.who button i{font-style:normal;font-weight:600;font-size:13px;color:var(--muted)}
+.who button[aria-pressed="true"]{background:var(--ink);color:#0A0A0D;box-shadow:none}
+.who button[aria-pressed="true"] i{color:rgba(10,10,13,.6)}
+.fbar .seg{margin:0 0 10px}
+.fbar>.chip{margin-bottom:10px}
 /* Топ-10: велика контурна цифра ліворуч від постера */
 .top10{--tw:122px;--nx0:calc(var(--tw)*.5)}
 .top10 .strip{counter-reset:t10}
@@ -788,6 +797,12 @@ input[type=text],input[type=search],input[type=password],textarea,select{border-
   .cal-list .cal-day:not(.later){display:none}
   .cal-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:0 24px}
   .cal-lh{grid-column:1/-1;font:800 28px/1 var(--poster);letter-spacing:.02em;text-transform:uppercase}
+  .who{margin:0 0 16px;padding:0;overflow:visible}
+  .who button{min-height:46px;padding:0 20px}
+  .fbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;margin:0 0 14px}
+  .fbar .seg,.fbar .tools,.fbar>.chip{margin:0}
+  .fbar .seg{min-width:0}
+  .fbar>.chip{min-height:42px}
   /* Сітки на всю ширину */
   .grid{grid-template-columns:repeat(auto-fill,minmax(184px,1fr));gap:32px 22px}
   .card .poster{border-radius:14px}

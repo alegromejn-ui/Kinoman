@@ -551,19 +551,18 @@
         : status === 'watching' ? emptyHtml('play', 'Зараз нічого не дивитесь', 'Натисніть «Дивлюсь» у картці фільму чи серіалу. Для серіалів тут буде видно, скільки серій вже позаду.', '<p><button class="btn" data-act="tab" data-tab="search">Знайти фільм</button></p>')
         : emptyHtml('eye', 'Поки нічого не переглянуто', 'Позначайте фільми як переглянуті й ставте свої оцінки від 1 до 10.', '<p><button class="btn" data-act="tab" data-tab="search">Знайти фільм</button></p>'));
     }
-    h += '<div class="seg" role="group" aria-label="Тип">' + [['', 'Усе'], ['movie', 'Фільми'], ['series', 'Серіали'], ['toon', 'Мультики']].map(function (t) { return '<button type="button" data-act="ltype" data-type="' + t[0] + '" aria-pressed="' + (f.type === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
-    h += '<div class="tools"><select data-change="time" aria-label="Час">' + [['', 'Будь-який час'], ['90', 'До 90 хв'], ['120', '90 хв – 2 год'], ['121', 'Понад 2 год']].map(function (o) { return '<option value="' + o[0] + '"' + ((f.time || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select><select data-change="sort" aria-label="Сортування">' + F.SORTS_FOR[status].map(function (k) { return '<option value="' + k + '"' + (f.sort === k ? ' selected' : '') + '>' + esc(F.SORTS[k]) + '</option>'; }).join('') + '</select></div>';
+    // З ким дивитись: один перемикач замість трьох окремих кнопок
+    var twoN = F.list(status, { two: true }).length, famN = F.list(status, { fam: true }).length, meN = F.list(status, { hide: true }).length;
+    var who = f.two ? 'two' : f.fam ? 'fam' : F.hideGrpOn() ? 'me' : 'all';
+    h += '<div class="who" role="group" aria-label="З ким дивитись">' + [['all', 'Усі', total, ''], ['me', 'Тільки я', meN, ''], ['two', 'Удвох', twoN, 'heart'], ['fam', 'Сім’єю', famN, 'home']].map(function (w) { return '<button type="button" data-act="who" data-w="' + w[0] + '" aria-pressed="' + (who === w[0]) + '">' + (w[3] ? ic(w[3], 'sm') : '') + w[1] + '<i>' + w[2] + '</i></button>'; }).join('') + '</div>';
+    var bar = '<div class="seg" role="group" aria-label="Тип">' + [['', 'Усе'], ['movie', 'Фільми'], ['series', 'Серіали'], ['toon', 'Мультики']].map(function (t) { return '<button type="button" data-act="ltype" data-type="' + t[0] + '" aria-pressed="' + (f.type === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>';
+    bar += '<div class="tools"><select data-change="time" aria-label="Час">' + [['', 'Будь-який час'], ['90', 'До 90 хв'], ['120', '90 хв – 2 год'], ['121', 'Понад 2 год']].map(function (o) { return '<option value="' + o[0] + '"' + ((f.time || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select><select data-change="sort" aria-label="Сортування">' + F.SORTS_FOR[status].map(function (k) { return '<option value="' + k + '"' + (f.sort === k ? ' selected' : '') + '>' + esc(F.SORTS[k]) + '</option>'; }).join('') + '</select></div>';
     var oc = status === 'want' ? F.oldCount('want') : 0;
-    var twoN = F.list(status, { two: true }).length;
-    if (twoN || f.two) h += '<p class="hs"><button type="button" class="chip' + (f.two ? ' on' : '') + '" data-act="twof" aria-pressed="' + !!f.two + '">' + ic('heart', 'sm') + 'Для двох ' + twoN + '</button></p>';
-    var famN = F.list(status, { fam: true }).length;
-    if (famN || f.fam) h += '<p class="hs"><button type="button" class="chip' + (f.fam ? ' on' : '') + '" data-act="famf" aria-pressed="' + !!f.fam + '">' + ic('home', 'sm') + 'Сімейні ' + famN + '</button></p>';
-    var grpN = F.list(status, { grp: true }).length;
-    if (grpN || F.hideGrpOn()) h += '<p class="hs"><button type="button" class="chip' + (F.hideGrpOn() ? ' on' : '') + '" data-act="hidegrp" aria-pressed="' + F.hideGrpOn() + '">' + ic('eyeoff', 'sm') + 'Сховати «Для двох» і «Сімейні»</button></p>';
-    if (oc || f.old) h += '<p class="hs"><button type="button" class="chip' + (f.old ? ' on' : '') + '" data-act="oldf" aria-pressed="' + !!f.old + '">' + ic('clock', 'sm') + 'Давно лежить ' + oc + '</button></p>';
+    if (oc || f.old) bar += '<button type="button" class="chip' + (f.old ? ' on' : '') + '" data-act="oldf" aria-pressed="' + !!f.old + '">' + ic('clock', 'sm') + 'Давно лежить ' + oc + '</button>';
+    h += '<div class="fbar">' + bar + '</div>';
     var gs = F.genres(status, (f.two || f.fam) ? {} : HD());
     if (gs.length > 1) h += '<div class="chips" role="group" aria-label="Жанри"><button class="chip' + (!f.genre ? ' on' : '') + '" data-act="genre" data-genre="">Усі жанри</button>' + gs.slice(0, 14).map(function (g) { return '<button class="chip' + (f.genre === g.name ? ' on' : '') + '" data-act="genre" data-genre="' + esc(g.name) + '">' + esc(F.genreUk(g.name)) + ' ' + g.count + '</button>'; }).join('') + '</div>';
-    if (!items.length) return h + emptyHtml('film', 'За цим фільтром порожньо', 'Змініть тип, жанр чи час.');
+    if (!items.length) return h + (who === 'two' || who === 'fam' ? emptyHtml(who === 'two' ? 'heart' : 'home', who === 'two' ? 'Для перегляду вдвох тут порожньо' : 'Для перегляду сім’єю тут порожньо', 'Відкрийте картку фільму і в розділі «Добірки» позначте «' + (who === 'two' ? 'Для двох' : 'Сімейні') + '».') : emptyHtml('film', 'За цим фільтром порожньо', 'Змініть тип, жанр чи час.'));
     return h + '<div class="' + (status === 'seen' ? 'stubs' : 'grid') + '">' + items.map(function (it, i) { var c = cardHtml(it, i, status); return status === 'watching' ? '<div class="cardwrap">' + c + '<button class="fin" data-act="finish" data-id="' + it.id + '" aria-label="Завершив: ' + esc(it.titleUk || it.title) + '">' + ic('check', 'sm') + 'Завершив</button></div>' : c; }).join('') + '</div>';
   }
 
@@ -1306,6 +1305,7 @@
       case 'homeview': ui.homeView = el.dataset.v === 'mine' ? 'mine' : 'cat'; try { localStorage.setItem('kinoman_home_view', ui.homeView); } catch (e) { /* без збереження */ } ui.enter = true; render(); window.scrollTo(0, 0); break;
       case 'resume': { var ri = F.getItem(el.dataset.id); if (ri) { F.setStatus(ri, 'watching'); toast('«' + (ri.titleUk || ri.title) + '» знову в «Дивлюсь»'); } break; }
       case 'skipseason': { var si = F.getItem(el.dataset.id); if (si) { var prevS = si.doneS; F.skipSeason(si.id); toast('Сховано. Нагадаю про наступний сезон', 'Повернути', function () { F.skipSeason(si.id, prevS); }); } break; }
+      case 'who': { var ww = el.dataset.w; F.setHideGrp(ww === 'me'); ['want', 'watching', 'seen'].forEach(function (k) { var lf0 = ui.lists[k]; if (lf0) { lf0.two = ww === 'two'; lf0.fam = ww === 'fam'; lf0.genre = ''; } }); render(); break; }
       case 'twof': { var tf = ui.lists[ui.tab]; if (tf) { tf.two = !tf.two; render(); } break; }
       case 'togtwo': { var lt = ui.sheet && F.getItem(ui.sheet.id); if (lt) { var on2 = F.toggleTwo(lt.id); toast(on2 ? 'Позначено «Для двох»' : 'Прибрано з «Для двох»'); renderSheet(); render(); } break; }
       case 'review': loadReview(true); break;
