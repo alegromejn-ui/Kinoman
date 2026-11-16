@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v46';
+  var VERSION = 'v48';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -23,7 +23,7 @@
   function on(f) { listeners.push(f); }
 
   // ---------- Стан ----------
-  function freshState() { return { v: 1, key: '', gemKey: '', tmdbKey: '', sync: { url: '', code: '', at: 0, bak: 0 }, tr: {}, rev: {}, imk: {}, imr: {}, nope: {}, osc: {}, recap: {}, qh: [], items: {}, cols: {}, gone: {}, mar: {}, meta: { created: FB.now(), lastBackup: 0 } }; }
+  function freshState() { return { v: 1, key: '', gemKey: '', tmdbKey: '', sync: { url: '', code: '', at: 0, bak: 0 }, tr: {}, rev: {}, imk: {}, imr: {}, nope: {}, osc: {}, recap: {}, qh: [], items: {}, cols: {}, gone: {}, mar: {}, fol: {}, meta: { created: FB.now(), lastBackup: 0 } }; }
   function imgPath(p) { p = String(p || ''); return /^\/[\w-]{5,60}\.(jpg|jpeg|png|webp)$/.test(p) ? p : ''; }
   function cleanCast(a) { return (Array.isArray(a) ? a : []).slice(0, 20).map(function (c) { return c && c.name ? { id: Math.max(0, Math.floor(Number(c.id) || 0)), name: String(c.name).slice(0, 80), character: String(c.character || '').slice(0, 100), photo: imgPath(c.photo) } : null; }).filter(Boolean); }
   function cleanSeasonEps(o) { var r = {}; if (o && typeof o === 'object') Object.keys(o).slice(0, 100).forEach(function (k) { var n = Math.floor(Number(o[k])); if (/^\d{1,3}$/.test(k) && Number(k) > 0 && n > 0 && n < 1000) r[k] = n; }); return r; }
@@ -60,6 +60,7 @@
   function cleanPart(p) { var id = Math.floor(Number(p && p.tid) || 0); return id > 0 && p.title ? { tid: id, mt: p.mt === 'tv' ? 'tv' : 'movie', title: String(p.title).slice(0, 120), year: /^\d{4}$/.test(String(p.year)) ? String(p.year) : '', poster: imgPath(p.poster) } : null; }
   function cleanMar(o) { var r = {}; if (o && typeof o === 'object') Object.keys(o).slice(0, 100).forEach(function (k) { var m = o[k]; if (!/^m[\w-]{1,30}$/.test(k) || !m || !String(m.name || '').trim()) return; var seen = {}, parts = (Array.isArray(m.parts) ? m.parts : []).map(cleanPart).filter(function (p) { if (!p || seen[p.mt + p.tid]) return false; seen[p.mt + p.tid] = 1; return true; }).slice(0, 60); if (!parts.length && !m.del) return; r[k] = { name: String(m.name).trim().slice(0, 80), src: m.src === 'ai' ? 'ai' : 'tmdb', parts: parts, at: Number(m.at) || 0, upd: Number(m.upd) || Number(m.at) || 0, del: !!m.del }; }); return r; }
   function cleanGone(o) { var r = {}; if (o && typeof o === 'object') Object.keys(o).slice(0, 5000).forEach(function (k) { if (isId(k) && Number(o[k]) > 0) r[k] = Number(o[k]); }); return r; }
+  function cleanFol(o) { var r = {}; if (o && typeof o === 'object') Object.keys(o).slice(0, 200).forEach(function (k) { var p = o[k]; if (!/^[1-9]\d{0,8}$/.test(k) || !p || !String(p.name || '').trim()) return; r[k] = { name: String(p.name).trim().slice(0, 80), photo: imgPath(p.photo), dept: p.dept === 'dir' ? 'dir' : p.dept === 'act' ? 'act' : '', at: Number(p.at) || 0, upd: Number(p.upd) || Number(p.at) || 0, del: !!p.del }; }); return r; }
   function validSyncUrl(u) { u = String(u || '').trim(); return /^https:\/\/script\.google\.com\/macros\/s\/[\w-]{20,120}\/exec$/.test(u) ? u : ''; }
   function normalizeState(o) {
     var s = freshState(); if (!o || typeof o !== 'object') return s;
@@ -67,7 +68,7 @@
     s.tmdbKey = typeof o.tmdbKey === 'string' ? o.tmdbKey.trim().slice(0, 600) : '';
     s.gemKey = typeof o.gemKey === 'string' ? o.gemKey.trim().slice(0, 200) : '';
     if (o.sync && typeof o.sync === 'object') s.sync = { url: validSyncUrl(o.sync.url), code: String(o.sync.code || '').slice(0, 100), at: Number(o.sync.at) || 0, bak: Number(o.sync.bak) || 0 };
-    s.cols = cleanCols(o.cols); s.gone = cleanGone(o.gone); s.mar = cleanMar(o.mar);
+    s.cols = cleanCols(o.cols); s.gone = cleanGone(o.gone); s.mar = cleanMar(o.mar); s.fol = cleanFol(o.fol);
     if (o.imk && typeof o.imk === 'object') Object.keys(o.imk).slice(-3000).forEach(function (k) { if (/^(movie|tv):\d{1,9}$/.test(k) && isId(o.imk[k])) s.imk[k] = o.imk[k]; });
     if (o.imr && typeof o.imr === 'object') Object.keys(o.imr).slice(-3000).forEach(function (k) { var v = o.imr[k]; if (isId(k) && v && num(v.r) != null) s.imr[k] = { r: num(v.r), at: Number(v.at) || 0 }; });
     if (o.osc && typeof o.osc === 'object') Object.keys(o.osc).slice(0, 200).forEach(function (k) { var v = o.osc[k]; if (!/^\d{4}:/.test(k) || !v || typeof v !== 'object') return; if (v.tid > 0) s.osc[k] = { tid: Math.floor(v.tid), mt: 'movie', title: String(v.title || '').slice(0, 200), year: String(v.year || '').slice(0, 4), poster: imgPath(v.poster), vote: num(v.vote) }; else if (v.none) s.osc[k] = { none: true, at: Number(v.at) || 0 }; });
@@ -345,6 +346,7 @@
       add('t-mystery', 'Детективи й містика', 'tv', '/discover/tv', best(500, { with_genres: '9648' }));
       add('t-short', 'Легкі на вечір: серії до 30 хвилин', 'tv', '/discover/tv', best(300, { 'with_runtime.lte': 30 }));
     } else if (cat === 'toon') {
+      add('c-trend', 'Топ-10 мультфільмів зараз', 'movie', '/discover/movie', ext({ with_genres: '16', sort_by: 'popularity.desc', 'vote_count.gte': 20 }, dates('movie', ymd(FB.now() - 240 * 86400000), ymd(FB.now()))), 1, 10); L[L.length - 1].top = true;
       add('c-pop', 'Мультфільми: популярні', 'movie', '/discover/movie', { with_genres: '16' }, 1);
       add('c-new', 'Нові мультфільми', 'movie', '/discover/movie', ext({ with_genres: '16' }, dates('movie', yAgo, '')), 1);
       add('c-top', 'Топ 100 мультфільмів за рейтингом', 'movie', '/discover/movie', best(1000, { with_genres: '16' }), 1, 100);
@@ -524,18 +526,91 @@
     catCache[ck] = { t: FB.now(), res: res }; return res;
   }
   // Сторінка актора
+  function deptOf(d) { var k = clean(d && d.known_for_department); return k === 'Directing' ? 'dir' : k === 'Acting' ? 'act' : ''; }
+  // Майбутні прем’єри людини: режисерські роботи завжди, ролі — якщо це не суто режисер
+  function futureCredits(cc, dept) {
+    var today = ymd(FB.now()), seen = {}, out = [];
+    var take = function (c, job) {
+      if (!c || !(c.id > 0) || (c.media_type !== 'movie' && c.media_type !== 'tv')) return;
+      var date = String(c.release_date || c.first_air_date || ''); if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today) return;
+      var title = clean(c.title || c.name); if (!title) return;
+      var k = c.media_type + c.id; if (seen[k]) return; seen[k] = 1;
+      out.push({ tid: Math.floor(c.id), mt: c.media_type, title: title.slice(0, 120), date: date, poster: imgPath(c.poster_path), job: job });
+    };
+    ((cc && cc.crew) || []).forEach(function (c) { if (c && c.job === 'Director') take(c, 'dir'); });
+    if (dept !== 'dir') ((cc && cc.cast) || []).forEach(function (c) {
+      if (!c || /\b(self|himself|herself)\b/i.test(String(c.character || ''))) return;
+      if (Array.isArray(c.genre_ids) && c.genre_ids.some(function (g) { return g === 10767 || g === 10763 || g === 10764 || g === 99; })) return;
+      take(c, 'act');
+    });
+    return out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; }).slice(0, 20);
+  }
   async function person(pid) {
     pid = Math.floor(Number(pid)); if (!(pid > 0)) throw err('TMDB_HTTP');
     var d = await tmdb('/person/' + pid, { language: 'uk-UA', append_to_response: 'combined_credits' });
     var bio = clean(d.biography);
     if (!bio) { try { var en = await tmdb('/person/' + pid, { language: 'en-US' }); bio = clean(en.biography); } catch (e) { /* без біографії */ } }
-    var seen = {}, cc = d.combined_credits || {}, crew = (cc.crew || []).filter(function (c) { return c && c.job === 'Director'; }).map(function (c) { var o = {}; for (var k in c) o[k] = c[k]; o.character = 'Режисер'; return o; });
-    var known = (cc.cast || []).concat(crew).filter(function (c) { return c && c.id > 0 && (c.media_type === 'movie' || c.media_type === 'tv') && imgPath(c.poster_path) && clean(c.title || c.name); });
+    var cc = d.combined_credits || {}, dept = deptOf(d);
+    var ok = function (c) { return c && c.id > 0 && (c.media_type === 'movie' || c.media_type === 'tv') && imgPath(c.poster_path) && clean(c.title || c.name); };
+    var uniq = function () { var seen = {}; return function (c) { var k = c.media_type + c.id; if (seen[k]) return false; seen[k] = 1; return true; }; };
+    var row = function (c, role) { var v = Number(c.vote_average); return { tid: Math.floor(c.id), mt: c.media_type, title: clean(c.title || c.name), year: yearOf(c.release_date || c.first_air_date), poster: c.poster_path, vote: v > 0 ? round1(v) : null, character: clean(role).slice(0, 80) }; };
+    // Режисерські роботи: уся фільмографія від новіших до старіших (ще не випущені — нагорі)
+    var when = function (c) { return String(c.release_date || c.first_air_date || '9999'); };
+    var directed = (cc.crew || []).filter(function (c) { return ok(c) && c.job === 'Director'; }).filter(uniq()).sort(function (a, b) { var x = when(a), y = when(b); return x < y ? 1 : x > y ? -1 : 0; }).slice(0, 80).map(function (c) { return row(c, ''); });
+    var known = (cc.cast || []).filter(ok);
     known.sort(function (a, b) { return (Number(b.vote_count) || 0) - (Number(a.vote_count) || 0); });
-    known = known.filter(function (c) { var k = c.media_type + c.id; if (seen[k]) return false; seen[k] = 1; return true; }).slice(0, 40).map(function (c) {
-      var v = Number(c.vote_average); return { tid: Math.floor(c.id), mt: c.media_type, title: clean(c.title || c.name), year: yearOf(c.release_date || c.first_air_date), poster: c.poster_path, vote: v > 0 ? round1(v) : null, character: clean(c.character).slice(0, 80) };
+    known = known.filter(uniq()).slice(0, 40).map(function (c) { return row(c, c.character); });
+    return { id: pid, name: clean(d.name).slice(0, 80), photo: imgPath(d.profile_path), bio: bio.slice(0, 3000), born: /^\d{4}-\d{2}-\d{2}$/.test(String(d.birthday)) ? d.birthday : '', place: clean(d.place_of_birth).slice(0, 120), dept: dept, directed: directed, known: known, soon: futureCredits(cc, dept) };
+  }
+  // Людина за іменем (режисер із картки фільму): спершу точний збіг імені, серед них — режисери
+  async function findPerson(name) {
+    name = clean(name).slice(0, 80); if (name.length < 2) return null;
+    var d = await tmdb('/search/person', { query: name, language: 'uk-UA', include_adult: 'false' }), rs = (Array.isArray(d.results) ? d.results : []).filter(function (r) { return r && r.id > 0; });
+    var low = name.toLowerCase(), exact = rs.filter(function (r) { return clean(r.name).toLowerCase() === low || clean(r.original_name).toLowerCase() === low; }), pool = exact.length ? exact : rs;
+    var hit = pool.filter(function (r) { return r.known_for_department === 'Directing'; })[0] || pool[0];
+    return hit ? { id: Math.floor(hit.id), name: clean(hit.name) || name, photo: imgPath(hit.profile_path) } : null;
+  }
+  // ---------- Стежу: актори й режисери, чиї майбутні фільми показуємо в «Скоро» ----------
+  // Список людей входить у копію даних і синхронізацію; їхні прем’єри — невеликий кеш у цьому браузері
+  var folMem = null;
+  function folLoad() { if (folMem) return folMem; try { folMem = JSON.parse(localStorage.getItem('kinoman_fol') || '{}'); } catch (e) { folMem = null; } if (!folMem || typeof folMem !== 'object' || Array.isArray(folMem)) folMem = {}; return folMem; }
+  function folSave() { try { localStorage.setItem('kinoman_fol', JSON.stringify(folMem)); } catch (e) { /* лише на цей сеанс */ } }
+  function mergeFol(f) { var ff = cleanFol(f); Object.keys(ff).forEach(function (k) { var x = ff[k], ex = S.fol[k]; if (!ex || x.upd > ex.upd) S.fol[k] = x; }); }
+  function followed() { return Object.keys(S.fol || {}).map(function (k) { var p = S.fol[k]; return p.del ? null : { id: Number(k), name: p.name, photo: p.photo, dept: p.dept, at: p.at }; }).filter(Boolean).sort(function (a, b) { return b.at - a.at; }); }
+  function isFollowed(pid) { var p = (S.fol || {})[String(Math.floor(Number(pid)))]; return !!(p && !p.del); }
+  var FOL_MAX = 60;
+  function setFollow(p, on, soon) {
+    var k = String(Math.floor(Number(p && p.id))); if (!/^[1-9]\d{0,8}$/.test(k)) return false;
+    if (!S.fol) S.fol = {};
+    var ex = S.fol[k], t = stamp(ex && ex.upd);
+    if (on) {
+      if (!clean(p.name) || (followed().length >= FOL_MAX && !(ex && !ex.del))) return false;
+      S.fol[k] = { name: clean(p.name).slice(0, 80), photo: imgPath(p.photo), dept: p.dept === 'dir' ? 'dir' : p.dept === 'act' ? 'act' : '', at: ex && !ex.del ? ex.at : t, upd: t, del: false };
+      if (Array.isArray(soon)) { folLoad()[k] = { at: FB.now(), items: soon }; folSave(); }
+    } else if (ex) { ex.del = true; ex.upd = t; delete folLoad()[k]; folSave(); }
+    save(); return !!on;
+  }
+  // Раз на добу перевіряємо, чи не з’явилися нові анонси (по кілька людей за раз)
+  async function refreshFollowed(max) {
+    if (!tmdbKeyOf()) return 0;
+    var mem = folLoad(), t = FB.now(), n = 0, todo = followed().filter(function (p) { var c = mem[p.id]; return !c || t - c.at > 86400000; }).slice(0, max || 8);
+    for (var i = 0; i < todo.length; i++) {
+      try { var cc = await tmdb('/person/' + todo[i].id + '/combined_credits', { language: 'uk-UA' }); mem[todo[i].id] = { at: FB.now(), items: futureCredits(cc, todo[i].dept) }; n++; } catch (e) { break; }
+    }
+    if (n) folSave();
+    return n;
+  }
+  function folUpcoming() {
+    var mem = folLoad(), today = ymd(FB.now()), out = [], seen = {};
+    followed().forEach(function (p) {
+      var c = mem[p.id]; if (!c || !Array.isArray(c.items)) return;
+      c.items.forEach(function (x) {
+        if (!x || !(x.tid > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(String(x.date)) || x.date < today || daysBetween(today, x.date) > 540) return;
+        var mt = x.mt === 'tv' ? 'tv' : 'movie', k = mt + x.tid; if (seen[k] || tmdbStatus(mt, x.tid) || isNope(mt, x.tid)) return; seen[k] = 1;
+        out.push({ fol: true, pid: p.id, who: p.name, date: x.date, label: (x.job === 'dir' ? 'Режисер: ' : 'У ролях: ') + p.name, r: { tid: Math.floor(x.tid), mt: mt, title: String(x.title || '').slice(0, 120), year: x.date.slice(0, 4), poster: imgPath(x.poster) } });
+      });
     });
-    return { id: pid, name: clean(d.name).slice(0, 80), photo: imgPath(d.profile_path), bio: bio.slice(0, 3000), born: /^\d{4}-\d{2}-\d{2}$/.test(String(d.birthday)) ? d.birthday : '', place: clean(d.place_of_birth).slice(0, 120), known: known };
+    return out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
   }
   async function testTmdb() { await tmdb('/configuration', {}); return true; }
 
@@ -833,6 +908,9 @@
   function setArch(id, on) { var it = S.items[id]; if (!it || it.arch === !!on) return; it.arch = !!on; it.updatedAt = stamp(it.updatedAt); save(); }
   function archived() { return Object.keys(S.items).map(function (k) { return S.items[k]; }).filter(function (it) { return it.arch; }).sort(function (a, b) { return b.updatedAt - a.updatedAt; }); }
   function yearNum(it) { var m = /\d{4}/.exec(it.year); return m ? Number(m[0]) : 0; }
+  // Вік глядача за віковим рейтингом США з OMDb (G, PG, PG-13, R, TV-14…); null, якщо рейтингу немає
+  var AGES = { 'G': 0, 'TV-Y': 0, 'TV-G': 0, 'PG': 6, 'GP': 6, 'M/PG': 6, 'TV-Y7': 6, 'TV-Y7-FV': 6, 'TV-PG': 6, 'PG-13': 12, 'TV-14': 14, 'R': 16, 'M': 16, 'NC-17': 18, 'TV-MA': 18, 'X': 18 };
+  function ageOf(it) { var r = clean(it && it.rated).toUpperCase().replace(/\s+/g, ''); return Object.prototype.hasOwnProperty.call(AGES, r) ? AGES[r] : null; }
   function isToon(it) { return Array.isArray(it.genre) && it.genre.indexOf('Animation') >= 0; }
   function list(status, o) {
     o = o || {};
@@ -848,6 +926,8 @@
     if (o.hide && !o.two && !o.fam && !o.grp) arr = arr.filter(function (it) { return !it.two && !it.fam; });
     if (o.genre) arr = arr.filter(function (it) { return it.genre.indexOf(o.genre) >= 0; });
     if (o.time) arr = arr.filter(function (it) { var m = it.runtime; if (!m) return false; return o.time === '90' ? m <= 90 : o.time === '120' ? m > 90 && m <= 120 : m > 120; });
+    // Вік: лише те, що підходить дитині такого віку (без вікової позначки не показуємо)
+    if (o.age != null && o.age !== '') { var mxAge = Number(o.age); arr = arr.filter(function (it) { var a = ageOf(it); return a != null && a <= mxAge; }); }
     var cmp = {
       added: function (a, b) { return b.addedAt - a.addedAt; },
       old: function (a, b) { return a.addedAt - b.addedAt; },
@@ -1098,7 +1178,7 @@
     var r = importJSON(JSON.stringify(o.data || {})); if (r.error) throw err('SYNC_BAD'); return r;
   }
   function setSync(url, code) { var u = validSyncUrl(url); if (String(url || '').trim() && !u) return false; S.sync.url = u; S.sync.code = String(code || '').trim().slice(0, 100); save(); return true; }
-  function payload() { return { app: 'kino', v: 2, exportedAt: FB.now(), items: S.items, cols: S.cols, gone: S.gone, mar: S.mar }; }
+  function payload() { return { app: 'kino', v: 2, exportedAt: FB.now(), items: S.items, cols: S.cols, gone: S.gone, mar: S.mar, fol: S.fol || {} }; }
   // Злиття: виграє новіше; видалення пам’ятаються, щоб не воскресали
   function mergeMar(m) { var mm = cleanMar(m); Object.keys(mm).forEach(function (k) { var x = mm[k], ex = S.mar[k]; if (!ex || x.upd > ex.upd) S.mar[k] = x; }); }
   // ---------- Кіномарафони ----------
@@ -1224,7 +1304,7 @@
     var added = 0, updated = 0, removed = 0;
     var gone = cleanGone(o.gone); Object.keys(gone).forEach(function (k) { if (!(S.gone[k] >= gone[k])) S.gone[k] = gone[k]; });
     var cols = cleanCols(o.cols); Object.keys(cols).forEach(function (k) { var c = cols[k], ex = S.cols[k]; if (!ex || c.upd > ex.upd) S.cols[k] = c; });
-    mergeMar(o.mar);
+    mergeMar(o.mar); mergeFol(o.fol);
     if (o.items && typeof o.items === 'object') Object.keys(o.items).slice(0, 5000).forEach(function (k) {
       var n = normalizeItem(o.items[k]); if (!n) return; var ex = S.items[n.id];
       if (S.gone[n.id] && S.gone[n.id] >= n.updatedAt) return;
@@ -1276,14 +1356,14 @@
       if (!ex) { S.items[n.id] = n; delete S.gone[n.id]; added++; } else if (n.updatedAt > ex.updatedAt) { S.items[n.id] = n; updated++; }
     });
     var cols = cleanCols(o.cols); Object.keys(cols).forEach(function (k) { var c = cols[k], ex = S.cols[k]; if (!ex || c.upd > ex.upd) S.cols[k] = c; });
-    mergeMar(o.mar);
+    mergeMar(o.mar); mergeFol(o.fol);
     save(); return { added: added, updated: updated };
   }
 
   Object.assign(FB, {
     VERSION: VERSION, init: init, on: on, save: save, isSaveFailed: function () { return saveFailed; },
     newEpisodes: newEpisodes, newSeasons: newSeasons, hasNewSeason: hasNewSeason, skipSeason: skipSeason, markEpisodeSeen: markEpisodeSeen, upcoming: upcoming, refreshSeries: refreshSeries, duoPick: duoPick, records: records, ymd: ymd,
-    discover: discover, person: person, advise: advise, findTmdb: findTmdb, colList: colList, addQuery: addQuery, queries: queries, clearQueries: clearQueries, status: status, recapOptions: recapOptions, recapOf: recapOf, aiRecap: aiRecap, imdbFor: imdbFor, isNope: isNope, setNope: setNope, nopeCount: nopeCount, clearNope: clearNope, toggleTwo: toggleTwo, toggleFam: toggleFam, hideGrpOn: hideGrpOn, setHideGrp: setHideGrp, aiReview: aiReview, reviewOf: reviewOf, addCol: addCol, renameCol: renameCol, removeCol: removeCol, toggleCol: toggleCol, colItems: colItems, nextForMe: nextForMe, epCode: epCode, yearStats: yearStats, syncOf: syncOf, setSync: setSync, syncNow: syncNow, mergeIn: mergeIn,
+    discover: discover, person: person, findPerson: findPerson, ageOf: ageOf, followed: followed, isFollowed: isFollowed, setFollow: setFollow, refreshFollowed: refreshFollowed, folUpcoming: folUpcoming, advise: advise, findTmdb: findTmdb, colList: colList, addQuery: addQuery, queries: queries, clearQueries: clearQueries, status: status, recapOptions: recapOptions, recapOf: recapOf, aiRecap: aiRecap, imdbFor: imdbFor, isNope: isNope, setNope: setNope, nopeCount: nopeCount, clearNope: clearNope, toggleTwo: toggleTwo, toggleFam: toggleFam, hideGrpOn: hideGrpOn, setHideGrp: setHideGrp, aiReview: aiReview, reviewOf: reviewOf, addCol: addCol, renameCol: renameCol, removeCol: removeCol, toggleCol: toggleCol, colItems: colItems, nextForMe: nextForMe, epCode: epCode, yearStats: yearStats, syncOf: syncOf, setSync: setSync, syncNow: syncNow, mergeIn: mergeIn,
     collName: collName, tmdbCollection: tmdbCollection, searchMarathons: searchMarathons, aiMarathon: aiMarathon, saveMarathon: saveMarathon, removeMarathon: removeMarathon, marathons: marathons, marathonOf: marathonOf,
     setArch: setArch, archived: archived, oldCount: oldCount, SORTS_FOR: SORTS_FOR,
     backupNow: backupNow, backupDue: backupDue, autoBackup: autoBackup, listBackups: listBackups, restoreBackup: restoreBackup,
