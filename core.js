@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v45';
+  var VERSION = 'v46';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -1116,12 +1116,36 @@
     return (Array.isArray(d.results) ? d.results : []).filter(function (r) { return r && r.id > 0 && clean(r.name); }).slice(0, 6).map(function (r) { return { cid: Math.floor(r.id), name: collName(r.name) || clean(r.name).slice(0, 80), poster: imgPath(r.poster_path) }; });
   }
   // Готові кіносаги: колекцію TMDB знаходимо за точною назвою, результат зберігаємо в цьому браузері
-  var SAGAS = [['Гаррі Поттер', 'Harry Potter'], ['Володар перснів', 'The Lord of the Rings'], ['Хоббіт', 'The Hobbit'], ['Зоряні війни', 'Star Wars'], ['Месники', 'The Avengers'], ['Пірати Карибського моря', 'Pirates of the Caribbean'],
+  var SAGAS = [['Гаррі Поттер', 'Harry Potter'], ['Володар перснів', 'The Lord of the Rings', 0, { films: [['The Lord of the Rings: The War of the Rohirrim', '2024']] }], ['Хоббіт', 'The Hobbit'], ['Зоряні війни', 'Star Wars', 0, { films: [['Star Wars: The Clone Wars', '2008'], ['Rogue One: A Star Wars Story', '2016'], ['Solo: A Star Wars Story', '2018'], ['The Mandalorian and Grogu', '2026']] }], ['Месники', 'The Avengers'], ['Пірати Карибського моря', 'Pirates of the Caribbean'],
     ['Сам удома', 'Home Alone'], ['Матриця', 'The Matrix'], ['Голодні ігри', 'The Hunger Games'], ['Парк Юрського періоду', 'Jurassic Park'], ['Індіана Джонс', 'Indiana Jones'], ['Назад у майбутнє', 'Back to the Future'],
-    ['Джон Вік', 'John Wick'], ['Місія нездійсненна', 'Mission: Impossible'], ['Джеймс Бонд', 'James Bond'], ['Дюна', 'Dune'], ['Аватар', 'Avatar'], ['Темний лицар', 'The Dark Knight'], ['Фантастичні звірі', 'Fantastic Beasts'],
-    ['Форсаж', 'The Fast and the Furious'], ['Людина-павук', 'Spider-Man'], ['Сутінки', 'The Twilight Saga'], ['Хрещений батько', 'The Godfather'], ['Той, хто біжить по лезу', 'Blade Runner'],
-    ['Історія іграшок', 'Toy Story', 1], ['Шрек', 'Shrek', 1], ['Як приборкати дракона', 'How to Train Your Dragon', 1], ['Крижане серце', 'Frozen', 1], ['Льодовиковий період', 'Ice Age', 1], ['Нікчемний я', 'Despicable Me', 1], ['Кунг-фу Панда', 'Kung Fu Panda', 1], ['Тачки', 'Cars', 1], ['Мадагаскар', 'Madagascar', 1], ['Суперсімейка', 'The Incredibles', 1]];
+    ['Джон Вік', 'John Wick', 0, { films: [['From the World of John Wick: Ballerina', '2025']] }], ['Місія нездійсненна', 'Mission: Impossible'], ['Джеймс Бонд', 'James Bond'], ['Дюна', 'Dune'], ['Аватар', 'Avatar'], ['Темний лицар', 'The Dark Knight'], ['Фантастичні звірі', 'Fantastic Beasts'],
+    ['Форсаж', 'The Fast and the Furious', 0, { films: [['Fast & Furious Presents: Hobbs & Shaw', '2019']] }], ['Людина-павук', 'Spider-Man', 0, { cols: ['The Amazing Spider-Man', 'Spider-Man (MCU)', 'Spider-Man: Spider-Verse'] }], ['Сутінки', 'The Twilight Saga'], ['Хрещений батько', 'The Godfather'], ['Той, хто біжить по лезу', 'Blade Runner'],
+    ['Історія іграшок', 'Toy Story', 1], ['Шрек', 'Shrek', 1, { cols: ['Puss in Boots'] }], ['Як приборкати дракона', 'How to Train Your Dragon', 1], ['Крижане серце', 'Frozen', 1], ['Льодовиковий період', 'Ice Age', 1], ['Нікчемний я', 'Despicable Me', 1, { cols: ['Minions'] }], ['Кунг-фу Панда', 'Kung Fu Panda', 1], ['Тачки', 'Cars', 1], ['Мадагаскар', 'Madagascar', 1, { films: [['Penguins of Madagascar', '2014']] }], ['Суперсімейка', 'The Incredibles', 1]];
   var sagaMem = null, sagaBusy = null;
+  // Колекція TMDB за точною англійською назвою («X Collection»)
+  async function collHit(q) {
+    var d = await tmdb('/search/collection', { query: q, language: 'en-US', page: 1 }), rs = Array.isArray(d.results) ? d.results : [], want = q.toLowerCase() + ' collection';
+    return rs.filter(function (r) { return r && r.id > 0 && String(r.name || '').toLowerCase() === want; })[0] || rs.filter(function (r) { return r && r.id > 0 && String(r.name || '').toLowerCase().indexOf(q.toLowerCase()) === 0; })[0] || null;
+  }
+  // Уся сага: основна колекція + споріднені колекції + окремі фільми всесвіту, за датою виходу
+  async function sagaData(q) {
+    var s = SAGAS.filter(function (x) { return x[1] === q; })[0], m = sagaLoad()[q]; if (!s || !m || !(m.cid > 0)) throw err('TMDB_HTTP');
+    var ex = s[3] || {}, cids = [m.cid], raw = [], i;
+    for (i = 0; i < (ex.cols || []).length; i++) { try { var h = await collHit(ex.cols[i]); if (h && cids.indexOf(Math.floor(h.id)) < 0) cids.push(Math.floor(h.id)); } catch (e) { /* без цієї гілки */ } }
+    for (i = 0; i < cids.length; i++) {
+      try { var d = await tmdb('/collection/' + cids[i], { language: 'uk-UA' }); (Array.isArray(d.parts) ? d.parts : []).forEach(function (r) { raw.push(r); }); }
+      catch (e) { if (i === 0) throw e; }
+    }
+    for (i = 0; i < (ex.films || []).length; i++) {
+      try {
+        var f = ex.films[i], sd = await tmdb('/search/movie', { query: f[0], year: f[1], language: 'uk-UA', page: 1, include_adult: 'false' }), rs = Array.isArray(sd.results) ? sd.results : [];
+        var hit = rs.filter(function (r) { return r && yearOf(r.release_date) === f[1] && String(r.original_title || '').toLowerCase() === f[0].toLowerCase(); })[0] || rs.filter(function (r) { return r && yearOf(r.release_date) === f[1]; })[0];
+        if (hit) raw.push(hit);
+      } catch (e) { /* без цього фільму */ }
+    }
+    var seen = {}, parts = raw.sort(function (a, b) { var x = a.release_date || '9999', y = b.release_date || '9999'; return x < y ? -1 : x > y ? 1 : 0; }).map(function (r) { return partOf(r, 'movie'); }).filter(function (p) { if (!p || seen[p.tid]) return false; seen[p.tid] = 1; return true; }).slice(0, 60);
+    return { key: 'ms' + m.cid, name: s[0], src: 'tmdb', parts: parts };
+  }
   function sagaLoad() { if (!sagaMem) { try { sagaMem = JSON.parse(localStorage.getItem('kinoman_sagas') || '{}') || {}; } catch (e) { sagaMem = {}; } } return sagaMem; }
   function sagaList(toon) {
     var m = sagaLoad();
@@ -1135,8 +1159,7 @@
       var n = 0;
       for (var i = 0; i < todo.length; i++) {
         try {
-          var q = todo[i][1], d = await tmdb('/search/collection', { query: q, language: 'en-US', page: 1 }), rs = Array.isArray(d.results) ? d.results : [], want = q.toLowerCase() + ' collection';
-          var hit = rs.filter(function (r) { return r && String(r.name || '').toLowerCase() === want; })[0] || rs.filter(function (r) { return r && String(r.name || '').toLowerCase().indexOf(q.toLowerCase()) === 0; })[0];
+          var q = todo[i][1], hit = await collHit(q);
           m[q] = hit && hit.id > 0 ? { cid: Math.floor(hit.id), back: imgPath(hit.backdrop_path), poster: imgPath(hit.poster_path) } : { miss: 1 }; n++;
         } catch (e) { if (e && (e.code === 'TMDB_NETWORK' || e.status === 401 || e.status === 429)) break; }
       }
@@ -1268,7 +1291,7 @@
     getItem: getItem, setStatus: setStatus, setMyRating: setMyRating, setNote: setNote, removeItem: removeItem, restoreItem: restoreItem, refresh: refresh,
     toggleEpisode: toggleEpisode, setSeasonWatched: setSeasonWatched, seasonProgress: seasonProgress, watchedCount: watchedCount,
     list: list, genres: genres, randomPick: randomPick, stats: stats, fmtMinutes: fmtMinutes, SORTS: SORTS, brief: brief,
-    backOf: backOf, backKnown: backKnown, setBack: setBack, fetchBack: fetchBack, sagaList: sagaList, sagasResolve: sagasResolve, calendar: calendar, seasonDates: seasonDates, today: function () { return ymd(FB.now()); },
+    backOf: backOf, backKnown: backKnown, setBack: setBack, fetchBack: fetchBack, sagaList: sagaList, sagasResolve: sagasResolve, sagaData: sagaData, calendar: calendar, seasonDates: seasonDates, today: function () { return ymd(FB.now()); },
     exportJSON: exportJSON, importJSON: importJSON, isId: isId, normalizeState: normalizeState, normalizeItem: normalizeItem, api: api, epKey: epKey
   });
   init();

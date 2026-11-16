@@ -208,8 +208,8 @@
     F.sagasResolve().then(function (ch) { if (ch) paintSagas(); }, function () {});
     if (!all.length) return '';
     var cards = ready.length ? ready.map(function (x) {
-      var m = F.marathonOf('mt' + x.cid), img = x.back ? F.tmdbImg(x.back, 'w780') : x.poster ? F.tmdbImg(x.poster, 'w342') : '';
-      return '<button class="cw saga glow" style="--h:' + hue(x.cid) + '" data-act="martmdb" data-cid="' + x.cid + '"><span class="cw-img"' + (img ? ' style="background-image:url(\'' + esc(img) + '\')"' : '') + '>' + (m && m.total ? '<span class="cw-bar"><i style="width:' + Math.round(m.done / m.total * 100) + '%"></i></span>' : '') + '</span><span class="cw-t">' + esc(x.name) + '</span><span class="cw-m">' + (m && m.total ? 'Переглянуто ' + m.done + ' з ' + m.total : 'Усі частини по порядку') + '</span></button>';
+      var m = F.marathonOf('ms' + x.cid), img = x.back ? F.tmdbImg(x.back, 'w780') : x.poster ? F.tmdbImg(x.poster, 'w342') : '';
+      return '<button class="cw saga glow" style="--h:' + hue(x.cid) + '" data-act="saga" data-q="' + esc(x.q) + '" data-cid="' + x.cid + '"><span class="cw-img"' + (img ? ' style="background-image:url(\'' + esc(img) + '\')"' : '') + '>' + (m && m.total ? '<span class="cw-bar"><i style="width:' + Math.round(m.done / m.total * 100) + '%"></i></span>' : '') + '</span><span class="cw-t">' + esc(x.name) + '</span><span class="cw-m">' + (m && m.total ? 'Переглянуто ' + m.done + ' з ' + m.total : 'Усі частини по порядку') + '</span></button>';
     }).join('') : [0, 1, 2, 3, 4].map(function () { return '<div class="cw sk" aria-hidden="true"><span class="cw-img"></span><i></i><i></i></div>'; }).join('');
     return '<section class="shelf sagas" data-sagas="' + (toon ? 1 : 0) + '"><div class="shelf-h"><h2>' + (toon ? 'Мультсаги' : 'Кіносаги') + '</h2><button class="more-link" data-act="marfind">Знайти іншу</button></div><div class="strip">' + cards + '</div></section>';
   }
@@ -396,6 +396,20 @@
       else h += '<p class="fine">Для Marvel чи DC додайте ключ Gemini в «Ще»: він складе список сам.</p>';
     }
     return h + '</div>';
+  }
+  // Готова кіносага: складена з кількох колекцій і окремих фільмів; збережену оновлюємо, коли виходять нові частини
+  async function openSaga(q, cid) {
+    var key = 'ms' + Math.floor(Number(cid)); if (ui.busy[key]) return;
+    if (ui.sheet && !ui.sheet.wheel) pushCurrent();
+    if (F.marathonOf(key)) {
+      ui.sheet = { coll: { id: 'mar', title: F.marathonOf(key).name, mar: { id: key } } }; renderSheet();
+      F.sagaData(q).then(function (d) { var now = F.marathonOf(key); if (now && d.parts.length > now.total) { F.saveMarathon(d); if (ui.sheet && ui.sheet.coll && ui.sheet.coll.mar && ui.sheet.coll.mar.id === key) renderSheet(); } }, function () {});
+      return;
+    }
+    ui.busy[key] = true; toast('Відкриваємо…');
+    try { var d = await F.sagaData(q); toastEl.classList.remove('show'); ui.sheet = { coll: { id: 'mar', title: d.name, mar: { id: null, data: d } } }; renderSheet(); var n = $('.sheet', sheetRoot); if (n) n.scrollTop = 0; }
+    catch (e) { toast(F.describeError(e)); goBack(); }
+    delete ui.busy[key];
   }
   async function openMarTmdb(cid) {
     var key = 'mt' + Math.floor(Number(cid)); if (ui.busy[key]) return;
@@ -1325,6 +1339,7 @@
       case 'archshow': ui.archOpen = !ui.archOpen; render(); break;
       case 'marfind': if (ui.sheet && !ui.sheet.wheel) pushCurrent(); ui.sheet = { coll: { id: 'marfind', title: 'Кіномарафони', find: { q: '', res: null, busy: false, err: '' } } }; renderSheet(); setTimeout(function () { var q = $('#marq'); if (q) q.focus(); }, 50); break;
       case 'martmdb': openMarTmdb(el.dataset.cid); break;
+      case 'saga': openSaga(el.dataset.q, el.dataset.cid); break;
       case 'maropen': { var mo = F.marathonOf(el.dataset.id); if (mo) { ui.sheet = { coll: { id: 'mar', title: mo.name, mar: { id: el.dataset.id } } }; ui.stack = []; renderSheet(); } break; }
       case 'marai': {
         var fc = ui.sheet && ui.sheet.coll && ui.sheet.coll.find; if (!fc || fc.busy) return; fc.busy = true; fc.err = ''; renderSheet();
