@@ -1,8 +1,8 @@
-/* Kinoman: логіка. Дані фільмів беруться з OMDb API, а ваші списки, оцінки й нотатки лежать лише в цьому телефоні. */
+/* Kinoman: логіка. Дані фільмів беруться з OMDb API, а ваші списки, оцінки й нотатки лежать лише на цьому пристрої. */
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v37';
+  var VERSION = 'v38';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -285,7 +285,7 @@
     var lib = S.items[id]; if (lib && lib.ratings && lib.ratings.imdb != null) return lib.ratings.imdb;
     var c = S.imr && S.imr[id]; return c ? c.r : null;
   }
-  // «Не цікавить»: приховані з каталогу (лише в цьому телефоні)
+  // «Не цікавить»: приховані з каталогу (лише на цьому пристрої)
   function nopeKey(mt, tid) { return (mt === 'tv' ? 'tv' : 'movie') + ':' + Math.floor(Number(tid)); }
   function isNope(mt, tid) { return !!(S.nope && S.nope[nopeKey(mt, tid)]); }
   function setNope(mt, tid, on) { if (!S.nope) S.nope = {}; var k = nopeKey(mt, tid); if (on) S.nope[k] = FB.now(); else delete S.nope[k]; capMap(S.nope, 5000); save(); }
@@ -847,7 +847,7 @@
   function hideGrpOn() { return hideGrp; }
   function setHideGrp(v) { hideGrp = !!v; try { localStorage.setItem('kinoman_hidegrp', hideGrp ? '1' : '0'); } catch (e) { /* ne zberezheno */ } return hideGrp; }
   function toggleFam(itemId) { var it = S.items[itemId]; if (!it) return false; it.fam = !it.fam; it.updatedAt = stamp(it.updatedAt); save(); return it.fam; }
-  // Коротка рецензія від Gemini без спойлерів. Кешується в цьому телефоні (не синхронізується).
+  // Коротка рецензія від Gemini без спойлерів. Кешується на цьому пристрої (не синхронізується).
   function reviewOf(id) { var r = S.rev && S.rev[id]; return r || null; }
   async function aiReview(it, force) {
     if (!S.rev) S.rev = {};

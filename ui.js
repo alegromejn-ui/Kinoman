@@ -354,7 +354,7 @@
     else if (ui.results.length && ui.translatedAs) h += '<p class="sub" style="margin:0 0 6px">Шукали за оригінальною назвою: ' + esc(ui.translatedAs) + '</p>';
     if (ui.results.length && ui.exact) h += '<p class="sub" style="margin:0 0 6px">Назва надто загальна, тому показано один найточніший збіг. Щоб уточнити, додайте рік, наприклад «Dark 2017».</p>';
     if (ui.results.length) {
-      h += '<div>' + ui.results.map(rowHtml).join('') + '</div>';
+      h += '<div class="rows">' + ui.results.map(rowHtml).join('') + '</div>';
       if (ui.results.length < ui.total) h += '<div class="more">' + (ui.loading ? '<div class="spin" role="status" aria-label="Завантаження"></div>' : '<button class="btn ghost block" data-act="more">Показати ще</button>') + '</div>';
     } else if (ui.loading) h += '<div class="spin" role="status" aria-label="Шукаємо"></div>';
     else if (ui.searched && !ui.error) h += emptyHtml('film', 'Нічого не знайшли', 'OMDb знає назви англійською. Спробуйте оригінальну назву або вставте ID з IMDb, наприклад tt0133093.');
@@ -449,7 +449,7 @@
       '<label class="fl" for="synccode">Секретне слово</label><input type="password" id="synccode" name="synccode" value="' + esc(so.code) + '" autocomplete="off" autocapitalize="none" spellcheck="false"><p style="margin:10px 0 0;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" type="submit">Зберегти</button><button class="btn ghost sm" type="button" data-act="syncnow"' + (so.url && so.code ? '' : ' disabled') + '>' + ic('refresh', 'sm') + 'Синхронізувати</button></p></form>';
     if (ui.syncMsg) h += '<p class="' + (ui.syncMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.syncMsg.text) + '</p>';
     if (so.at) h += '<p class="fine">Остання синхронізація: ' + esc(new Date(so.at).toLocaleString('uk-UA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })) + '. Додаток синхронізується й сам, коли ви його відкриваєте.</p>';
-    h += '<p class="fine">Адреса й слово зберігаються лише в цьому телефоні та не потрапляють у копію даних.</p>';
+    h += '<p class="fine">Адреса й слово зберігаються лише на цьому пристрої та не потрапляють у копію даних.</p>';
     if (so.url && so.code) h += bakHtml(so);
     return h + '</section>';
   }
@@ -520,20 +520,20 @@
     h += '<form class="keyrow" data-form="key"><input type="text" id="key" name="key" value="' + esc(F.keyOf()) + '" placeholder="Ключ з листа" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Ключ OMDb"><button class="btn" type="submit">Зберегти</button></form>';
     h += '<p style="margin:10px 0 0"><button class="btn ghost sm" data-act="testkey"' + (hasKey ? '' : ' disabled') + '>Перевірити ключ</button></p>';
     if (ui.keyMsg) h += '<p class="' + (ui.keyMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.keyMsg.text) + '</p>';
-    h += '<p class="fine">Ключ зберігається лише в цьому телефоні й не потрапляє в копію даних. OMDb приймає ключ лише в адресі запиту, тому нікому його не показуйте й не публікуйте.</p></section>';
+    h += '<p class="fine">Ключ зберігається лише на цьому пристрої й не потрапляє в копію даних. OMDb приймає ключ лише в адресі запиту, тому нікому його не показуйте й не публікуйте.</p></section>';
     h += '<section class="panel"><h2>TMDB (необов’язково)</h2><p class="sub" style="margin:0 0 10px">З ключем TMDB у картці фільму з’являються склад акторів із фото, схожі фільми та українські назви й описи. Безкоштовний ключ: <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a>. Підійде довгий «API Read Access Token» або короткий «API Key».</p>';
     h += '<form class="keyrow" data-form="tmdbkey"><input type="text" id="tmdbkey" name="tmdbkey" value="' + esc(F.tmdbKeyOf()) + '" placeholder="Ключ TMDB" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Ключ TMDB"><button class="btn" type="submit">Зберегти</button></form>';
     h += '<p style="margin:10px 0 0"><button class="btn ghost sm" data-act="testtmdb"' + (F.tmdbKeyOf() ? '' : ' disabled') + '>Перевірити ключ</button></p>';
     if (ui.tmdbMsg) h += '<p class="' + (ui.tmdbMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.tmdbMsg.text) + '</p>';
-    h += '<p class="fine">Ключ зберігається лише в цьому телефоні й не потрапляє в копію даних. Цей додаток використовує TMDB API, але не схвалений і не сертифікований TMDB.</p></section>';
+    h += '<p class="fine">Ключ зберігається лише на цьому пристрої й не потрапляє в копію даних. Цей додаток використовує TMDB API, але не схвалений і не сертифікований TMDB.</p></section>';
     h += '<section class="panel"><h2>Gemini (необов’язково)</h2><p class="sub" style="margin:0 0 10px">З ключем Gemini можна шукати фільми українською та перекладати сюжет. Без нього все працює, але назви треба вводити англійською.</p>';
     h += '<form class="keyrow" data-form="gemkey"><input type="text" id="gemkey" name="gemkey" value="' + esc(F.gemKeyOf()) + '" placeholder="Ключ Gemini" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Ключ Gemini"><button class="btn" type="submit">Зберегти</button></form>';
     h += '<p style="margin:10px 0 0;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost sm" data-act="testgem"' + (F.gemKeyOf() ? '' : ' disabled') + '>Перевірити ключ</button>' + (!F.gemKeyOf() && F.foreignGemKey() ? '<button class="btn soft sm" data-act="usenutri">Взяти ключ із NutriPlan</button>' : '') + '</p>';
     if (ui.gemMsg) h += '<p class="' + (ui.gemMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.gemMsg.text) + '</p>';
-    h += '<p class="fine">Ключ зберігається лише в цьому телефоні й не потрапляє в копію даних. До Google надсилається тільки назва, яку ви шукаєте, та опис фільму для перекладу. Це безкоштовно в межах ліміту Google.</p></section>';
+    h += '<p class="fine">Ключ зберігається лише на цьому пристрої й не потрапляє в копію даних. До Google надсилається тільки назва, яку ви шукаєте, та опис фільму для перекладу. Це безкоштовно в межах ліміту Google.</p></section>';
     h += '<section class="panel"><h2>Ваша статистика</h2><div class="stats"><div class="stat"><div class="v">' + s.seen + '</div><div class="n">переглянуто</div></div><div class="stat"><div class="v">' + s.want + '</div><div class="n">в обраному</div></div><div class="stat"><div class="v">' + (s.avgMine == null ? '—' : s.avgMine.toFixed(1)) + '</div><div class="n">середня оцінка</div></div><div class="stat"><div class="v">' + (s.minutes ? esc(F.fmtMinutes(s.minutes)) : '—') + '</div><div class="n">часу за екраном</div></div></div>' + (s.topGenres.length ? '<p class="sub">Найчастіше: ' + s.topGenres.map(function (g) { return esc(F.genreUk(g.name)); }).join(', ') + '</p>' : '') + '</section>';
     h += yearPanel() + chartsPanel() + recordsPanel() + colPanel() + archPanel() + syncPanel();
-    h += '<section class="panel"><h2>Копія даних</h2><p class="sub" style="margin:0 0 10px">Списки, оцінки й нотатки лежать тільки в цьому телефоні. Збережіть копію, щоб перенести їх на інший пристрій чи не втратити при очищенні браузера.</p><div class="actions" style="margin-top:0"><button class="btn ghost" data-act="export">' + ic('download', 'sm') + 'Зберегти копію</button><button class="btn ghost" data-act="import">' + ic('upload', 'sm') + 'Відновити</button></div><input type="file" id="import-file" accept="application/json,.json" class="hide">';
+    h += '<section class="panel"><h2>Копія даних</h2><p class="sub" style="margin:0 0 10px">Списки, оцінки й нотатки лежать тільки на цьому пристрої. Збережіть копію, щоб перенести їх на інший пристрій чи не втратити при очищенні браузера.</p><div class="actions" style="margin-top:0"><button class="btn ghost" data-act="export">' + ic('download', 'sm') + 'Зберегти копію</button><button class="btn ghost" data-act="import">' + ic('upload', 'sm') + 'Відновити</button></div><input type="file" id="import-file" accept="application/json,.json" class="hide">';
     if (ui.backupMsg) h += '<p class="' + (ui.backupMsg.ok ? 'ok' : 'er-t') + '" role="status" style="margin:10px 0 0">' + esc(ui.backupMsg.text) + '</p>';
     if (F.isSaveFailed()) h += '<p class="er-t">Телефон не дає зберегти дані. Звільніть місце або вимкніть приватний режим.</p>';
     h += '</section>';
@@ -967,13 +967,40 @@
   // ---------- Вивід ----------
   function render() {
     var st = ui.tab, keep = !ui.enter && ui.lastTab === st ? Array.prototype.map.call(app.querySelectorAll('.strip'), function (x) { return x.scrollLeft; }) : null; ui.lastTab = st;
-    app.className = ui.enter ? 'enter' : ''; ui.enter = false;
+    app.className = 'tab-' + st + (ui.enter ? ' enter' : ''); ui.enter = false;
     app.innerHTML = st === 'home' ? renderHome() : st === 'search' ? renderSearch() : st === 'more' ? renderMore() : renderList(st);
     tabsEl.innerHTML = TABS.map(function (t) { return '<button data-act="tab" data-tab="' + t[0] + '" aria-label="' + t[1] + '"' + (st === t[0] ? ' aria-current="page"' : '') + '>' + ic(t[2]) + '<span>' + t[1] + '</span>' + '</button>'; }).join('');
     if (keep) Array.prototype.forEach.call(app.querySelectorAll('.strip'), function (x, i) { if (keep[i]) x.scrollLeft = keep[i]; });
     if (ui.sheet) renderSheet();
   }
-  function setTab(t) { ui.tab = t; ui.enter = true; ui.keyMsg = null; ui.backupMsg = null; ui.gemMsg = null; ui.tmdbMsg = null; render(); window.scrollTo(0, 0); }
+  function setTab(t) { ui.tab = t; ui.enter = true; ui.keyMsg = null; ui.backupMsg = null; ui.gemMsg = null; ui.tmdbMsg = null; render(); window.scrollTo(0, 0); if (t === 'search' && isDesktop()) { var q = $('#q'); if (q) q.focus(); } }
+  // ---------- ПК: широкий екран ----------
+  function isDesktop() { return !!(window.matchMedia && window.matchMedia('(min-width:1024px)').matches); }
+  // Стрілки для горизонтальних полиць: одна пара на сторінку, з’являється над полицею під курсором
+  function initDesktop() {
+    if (!window.matchMedia || !window.matchMedia('(hover:hover) and (pointer:fine)').matches) return;
+    var cur = null, hideT = 0;
+    var mk = function (dir) { var b = document.createElement('button'); b.type = 'button'; b.className = 'sarrow ' + (dir < 0 ? 'prev' : 'next'); b.setAttribute('aria-label', dir < 0 ? 'Прокрутити назад' : 'Прокрутити далі'); b.innerHTML = ic(dir < 0 ? 'left' : 'right'); b.addEventListener('click', function () { if (cur && cur.isConnected) cur.scrollBy({ left: dir * Math.max(240, cur.clientWidth * 0.8), behavior: 'smooth' }); }); b.addEventListener('mouseenter', function () { clearTimeout(hideT); }); b.addEventListener('mouseleave', later); document.body.appendChild(b); return b; };
+    var prev = mk(-1), next = mk(1);
+    function place() {
+      if (!cur || !cur.isConnected || !isDesktop()) { prev.classList.remove('show'); next.classList.remove('show'); return; }
+      var r = cur.getBoundingClientRect(), max = cur.scrollWidth - cur.clientWidth;
+      // по висоті центруємо на постері, а не на підписі під ним
+      var p = cur.querySelector('.poster, .pic'), pr = p ? p.getBoundingClientRect() : r, y = pr.top + pr.height / 2 - 22;
+      prev.style.top = next.style.top = y + 'px';
+      prev.style.left = (r.left + 6) + 'px'; next.style.left = (r.right - 50) + 'px';
+      prev.classList.toggle('show', max > 4 && cur.scrollLeft > 4);
+      next.classList.toggle('show', max > 4 && cur.scrollLeft < max - 4);
+    }
+    function later() { clearTimeout(hideT); hideT = setTimeout(function () { cur = null; place(); }, 180); }
+    document.addEventListener('mouseover', function (e) {
+      var s = e.target.closest && e.target.closest('.strip, .seasons');
+      if (s) { clearTimeout(hideT); if (s !== cur) { cur = s; } place(); }
+      else if (cur && !(e.target.closest && e.target.closest('.sarrow'))) later();
+    });
+    document.addEventListener('scroll', function (e) { if (cur) { if (e.target === cur) place(); else { cur = null; place(); } } }, true);
+    window.addEventListener('resize', function () { cur = null; place(); });
+  }
 
   // ---------- Події ----------
   async function onAct(el) {
@@ -1298,7 +1325,16 @@
     document.addEventListener('error', function (e) {
       var t = e.target; if (t && t.tagName === 'IMG' && t.closest('.poster')) t.remove();
     }, true);
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if ($('#sugg.show')) { hideSugg(); return; } if (ui.sheet) dismiss(); } });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { if ($('#sugg.show')) { hideSugg(); return; } if (ui.sheet) dismiss(); return; }
+      // ПК: «/» відкриває пошук, цифри 1–6 перемикають розділи (не під час введення тексту)
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      var t = e.target, typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+      if (typing) return;
+      if (e.key === '/') { e.preventDefault(); if (ui.sheet) closeSheet(); if (ui.tab !== 'search') setTab('search'); var q = $('#q'); if (q) { q.focus(); q.select(); } return; }
+      if (!ui.sheet && e.key >= '1' && e.key <= String(TABS.length)) { setTab(TABS[Number(e.key) - 1][0]); }
+    });
+    initDesktop();
     render();
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(function () { });
   }
