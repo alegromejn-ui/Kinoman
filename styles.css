@@ -993,3 +993,16 @@ h2 .cnt{font:600 13px/1 var(--font);color:var(--muted);margin-left:8px;letter-sp
   .sheetbar button{width:calc(48px*1.2);height:calc(48px*1.2)}
   .sheetbar button svg.ic{width:28px;height:28px}
 }
+
+/* v51: компактніша картка фільму на ПК — вміст у колонці до 1320px, оцінки й трейлер не розтягуються */
+@media (min-width:1024px){
+  .sheet{--sp:max(var(--pad),calc((100vw - 1320px)/2))}
+  .sheet .coll,.sheet .duo{--sp:var(--pad)}
+  .body:has(>.ticket){grid-template-columns:minmax(0,1fr) 380px;column-gap:44px}
+  .body>.scores{grid-template-columns:repeat(3,minmax(0,190px));justify-content:start}
+  .body>.scores .score{padding:13px 8px}
+  .body .watch .btn{flex:0 0 auto;min-width:190px}
+  .hero,.hero.has-back{min-height:min(58vh,580px);padding-bottom:36px}
+  .hero .poster{width:200px}
+  .hero h3{font-size:clamp(52px,5.2vw,92px)}
+}
