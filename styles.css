@@ -1007,3 +1007,21 @@ h2 .cnt{font:600 13px/1 var(--font);color:var(--muted);margin-left:8px;letter-sp
   .hero h3{font-size:clamp(52px,5.2vw,92px)}
 }
 .tgrid>.tail-hide{display:none}
+/* v55: видалення добірок каталогу з головної */
+.shelf-acts{display:flex;align-items:center;gap:6px;flex:none}
+.shelf-x{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:var(--muted);opacity:.7}
+.shelf-x:active{transform:scale(.92)}
+.colrow .btn{margin-left:auto}
+@media (hover:hover) and (pointer:fine){.shelf-x{opacity:0;transition:opacity .15s,color .15s,background .15s}.shelf:hover .shelf-x,.shelf-x:focus-visible{opacity:.8}.shelf-x:hover{opacity:1;color:var(--bad);background:var(--raised)}}
+/* v56: власні добірки в рядку «Усі / Тільки я / Удвох / Сім'єю» */
+.who{flex-wrap:nowrap}
+.whoc{flex:none;display:inline-flex;align-items:stretch;border-radius:12px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}
+.who .whoc button{background:transparent;box-shadow:none}
+.who .whoc button[data-act="who"]{padding-right:8px}
+.who .whoc .whox{min-height:0;padding:0 10px 0 4px;color:var(--muted);gap:0}
+.whoc.on{background:var(--ink);box-shadow:none}
+.who .whoc.on button{background:transparent;color:#0A0A0D}
+.who .whoc.on .whox{color:rgba(10,10,13,.6)}
+.who .whoadd{background:transparent;box-shadow:inset 0 0 0 1px var(--line);color:var(--muted);border-style:dashed}
+@media (min-width:1024px){.who{flex-wrap:wrap}}
+@media (hover:hover) and (pointer:fine){.who .whoc .whox:hover{color:var(--bad)}.who .whoadd:hover{color:var(--ink)}}

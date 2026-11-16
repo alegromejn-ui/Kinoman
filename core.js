@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v54';
+  var VERSION = 'v56';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -921,9 +921,10 @@
     if (o.type === 'toon') arr = arr.filter(isToon);
     if (o.two) arr = arr.filter(function (it) { return it.two; });
     if (o.fam) arr = arr.filter(function (it) { return it.fam; });
+    if (o.col) arr = arr.filter(function (it) { return it.cols.indexOf(o.col) >= 0; });
     if (o.grp) arr = arr.filter(function (it) { return it.two || it.fam; });
     // o.hide: не показувати позначені «Для двох» і «Сімейні» (лише у відображенні; статистика й сповіщення бачать усе)
-    if (o.hide && !o.two && !o.fam && !o.grp) arr = arr.filter(function (it) { return !it.two && !it.fam; });
+    if (o.hide && !o.two && !o.fam && !o.grp && !o.col) arr = arr.filter(function (it) { return !it.two && !it.fam; });
     if (o.genre) arr = arr.filter(function (it) { return it.genre.indexOf(o.genre) >= 0; });
     if (o.time) arr = arr.filter(function (it) { var m = it.runtime; if (!m) return false; return o.time === '90' ? m <= 90 : o.time === '120' ? m > 90 && m <= 120 : m > 120; });
     // Вік: лише те, що підходить дитині такого віку (без вікової позначки не показуємо)
