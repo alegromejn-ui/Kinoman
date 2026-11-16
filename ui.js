@@ -821,9 +821,10 @@
     }).join('') + '</div>';
     var sec = function (title, arr, flag) {
       if (!arr || !arr.length) return '';
-      var open = !!sh[flag], a = open ? arr : arr.slice(0, 12);
-      return '<h2>' + title + '<small class="cnt">' + arr.length + '</small></h2><div class="tgrid">' + a.map(function (r) { return catTile(r).replace('</span></button>', '</span>' + (r.character ? '<span class="role">' + esc(r.character) + '</span>' : '') + '</button>'); }).join('') + '</div>' +
-        (arr.length > 12 ? '<p style="margin:16px 0 0"><button class="btn ghost block" data-act="allknown" data-k="' + flag + '">' + (open ? 'Згорнути' : 'Показати всі ' + arr.length) + '</button></p>' : '');
+      // згорнутий список: на телефоні 12 (чотири рядки по три), на ПК — рівно два повні рядки (обрізає fitGrids)
+      var open = !!sh[flag], a = open ? arr : arr.slice(0, isDesktop() ? 40 : 12);
+      return '<h2>' + title + '<small class="cnt">' + arr.length + '</small></h2><div class="tgrid"' + (open ? '' : ' data-fit="' + arr.length + '"') + '>' + a.map(function (r) { return catTile(r).replace('</span></button>', '</span>' + (r.character ? '<span class="role">' + esc(r.character) + '</span>' : '') + '</button>'); }).join('') + '</div>' +
+        (arr.length > 12 ? '<p class="fitbtn" style="margin:16px 0 0"><button class="btn ghost block" data-act="allknown" data-k="' + flag + '">' + (open ? 'Згорнути' : 'Показати всі ' + arr.length) + '</button></p>' : '');
     };
     var dirs = sec('Режисерські роботи', d.directed, 'allDir'), roles = sec(d.directed && d.directed.length ? 'Ролі' : 'Фільми й серіали', d.known, 'allKnown');
     h += d.dept === 'dir' || (d.directed && d.directed.length > d.known.length) ? dirs + roles : roles + dirs;
@@ -1050,6 +1051,17 @@
     if (lib && lib.fetchedAt) h += '<p class="fine">Рейтинги станом на ' + esc(new Date(lib.fetchedAt).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })) + ' Вони змінюються, тож за потреби оновіть.</p>';
     return h + '</div>';
   }
+  // ПК: у згорнутій сітці лишаємо рівно два повні рядки, щоб другий рядок не був напівпорожній
+  function fitGrids() {
+    if (!isDesktop()) return;
+    Array.prototype.forEach.call(sheetRoot.querySelectorAll('.tgrid[data-fit]'), function (g) {
+      var cols = String(getComputedStyle(g).gridTemplateColumns || '').split(' ').filter(Boolean).length; if (!(cols > 0)) return;
+      var total = Number(g.getAttribute('data-fit')) || 0, have = g.children.length, keep = Math.max(cols, Math.min(have, cols * 2));
+      if (have < total) keep -= keep % cols;
+      while (g.children.length > keep) g.removeChild(g.lastElementChild);
+      var btn = g.nextElementSibling; if (btn && btn.classList.contains('fitbtn') && g.children.length >= total) btn.remove();
+    });
+  }
   function renderSheet() {
     syncExtras();
     document.documentElement.classList.toggle('has-sheet', !!ui.sheet);
@@ -1060,6 +1072,7 @@
     sheetRoot.innerHTML = '<div class="scrim' + (again ? ' static' : '') + '" data-act="scrim"><div class="sheet' + (ui.sheet.wheel ? ' wheel-sheet' : '') + '" role="dialog" aria-modal="true" aria-label="' + esc(ui.sheet.person ? ui.sheet.person.name : ui.sheet.wheel ? 'Колесо' : ui.sheet.duo ? 'Вечір удвох' : ui.sheet.coll ? ui.sheet.coll.title : (ui.sheet.item || ui.sheet.brief || {}).title || 'Картка') + '">' + sheetHtml() + '</div></div>';
     var n = $('.sheet', sheetRoot); if (n && top) n.scrollTop = top;
     document.body.style.overflow = 'hidden';
+    fitGrids();
     histSync();
   }
   async function openSheet(id, brief) {
@@ -1485,7 +1498,8 @@
       else if (cur && !(e.target.closest && e.target.closest('.sarrow'))) later();
     });
     document.addEventListener('scroll', function (e) { if (peekFor || peekPend) peekHide(); if (cur) { if (e.target === cur) place(); else { cur = null; place(); } } }, true);
-    window.addEventListener('resize', function () { cur = null; place(); });
+    var fitT = 0;
+    window.addEventListener('resize', function () { cur = null; place(); clearTimeout(fitT); fitT = setTimeout(function () { if (ui.sheet && ui.sheet.person) renderSheet(); }, 200); });
   }
 
   // ---------- Події ----------
