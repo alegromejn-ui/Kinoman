@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v51';
+  var VERSION = 'v52';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -1223,6 +1223,7 @@
         if (hit) raw.push(hit);
       } catch (e) { /* без цього фільму */ }
     }
+    if (!s[2]) raw = raw.filter(function (r) { return !(r && Array.isArray(r.genre_ids) && r.genre_ids.indexOf(16) >= 0); }); // у кіносагах без мультфільмів
     var seen = {}, parts = raw.sort(function (a, b) { var x = a.release_date || '9999', y = b.release_date || '9999'; return x < y ? -1 : x > y ? 1 : 0; }).map(function (r) { return partOf(r, 'movie'); }).filter(function (p) { if (!p || seen[p.tid]) return false; seen[p.tid] = 1; return true; }).slice(0, 60);
     return { key: 'ms' + m.cid, name: s[0], src: 'tmdb', parts: parts };
   }

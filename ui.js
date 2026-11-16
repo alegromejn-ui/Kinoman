@@ -427,7 +427,7 @@
     if (ui.sheet && !ui.sheet.wheel) pushCurrent();
     if (F.marathonOf(key)) {
       ui.sheet = { coll: { id: 'mar', title: F.marathonOf(key).name, mar: { id: key } } }; renderSheet();
-      F.sagaData(q).then(function (d) { var now = F.marathonOf(key); if (now && d.parts.length > now.total) { F.saveMarathon(d); if (ui.sheet && ui.sheet.coll && ui.sheet.coll.mar && ui.sheet.coll.mar.id === key) renderSheet(); } }, function () {});
+      F.sagaData(q).then(function (d) { var now = F.marathonOf(key); if (now && d.parts.length && d.parts.length !== now.total) { F.saveMarathon(d); if (ui.sheet && ui.sheet.coll && ui.sheet.coll.mar && ui.sheet.coll.mar.id === key) renderSheet(); } }, function () {});
       return;
     }
     ui.busy[key] = true; toast('Відкриваємо…');
