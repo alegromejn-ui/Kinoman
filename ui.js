@@ -74,7 +74,7 @@
   var ST_IC = { want: ['heart', 'В обраних'], watching: ['play', 'Дивлюсь'], seen: ['eye', 'Переглянуто'] };
   function catTile(r) {
     if (F.isNope(r.mt, r.tid) && !F.tmdbStatus(r.mt, r.tid)) return '';
-    var st = F.tmdbStatus(r.mt, r.tid), data = ' data-mt="' + r.mt + '" data-tid="' + r.tid + '" data-title="' + esc(r.title) + '" data-year="' + esc(r.year) + '" data-poster="' + esc(r.poster) + '"';
+    var st = F.tmdbStatus(r.mt, r.tid), data = ' data-mt="' + r.mt + '" data-tid="' + r.tid + '" data-title="' + esc(r.title) + '" data-year="' + esc(r.year) + '" data-poster="' + esc(r.poster) + '"' + (r.back ? ' data-back="' + esc(r.back) + '"' : '');
     var btn = '<button class="tile glow" style="--h:' + hue(r.tid) + '" data-act="cat"' + data + '><span class="poster"><span class="ph">' + esc(r.title) + '</span><img src="' + esc(F.tmdbImg(r.poster, 'w342')) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">' + (function () { var im = F.imdbFor(r.mt, r.tid); return im != null ? '<span class="badge"><span class="imdb" title="IMDb">IMDb ' + im.toFixed(1) + '</span></span>' : r.vote ? '<span class="badge"><span class="tm" title="Оцінка TMDB">TMDB ' + r.vote.toFixed(1) + '</span></span>' : ''; })() + (r.rank ? '<span class="rk" aria-label="Місце ' + r.rank + '">' + r.rank + '</span>' : '') + '</span><span class="name">' + esc(r.title) + '</span><span class="yr">' + esc(r.year) + '</span></button>';
     var mark = st && ST_IC[st] ? (st === 'want' ? '<button class="qin st-want" data-act="catun"' + data + ' aria-label="Прибрати з обраних: ' + esc(r.title) + '">' + ic('heart', 'sm') + '</button>' : '<span class="qin st-' + st + '" role="img" aria-label="' + ST_IC[st][1] + '">' + ic(ST_IC[st][0], 'sm') + '</span>') : '<button class="qadd" data-act="catadd"' + data + ' aria-label="В обране: ' + esc(r.title) + '">' + ic('plus', 'sm') + '</button>';
     var nope = st ? '' : '<button class="qnope" data-act="catnope"' + data + ' aria-label="Не цікавить: ' + esc(r.title) + '">' + ic('eyeoff', 'sm') + '</button>';
@@ -167,6 +167,49 @@
   function paintShelf(def) {
     var box = app && app.querySelector('[data-shelf="' + def.id + '"]'); if (!box) return;
     var html = shelfSection(def); if (html) box.outerHTML = html; else box.remove();
+    var d0 = F.collDefs(ui.homeMt)[0]; if (d0 && d0.id === def.id) paintHero();
+  }
+  // ---------- ПК: великий банер на головній ----------
+  var backTried = {};
+  // Широкий кадр для тайтла зі списків: один легкий запит до TMDB, далі з кешу
+  function needBack(it, done) {
+    if (!it || !isDesktop() || !F.tmdbKeyOf() || F.backKnown(it.id) || backTried[it.id]) return;
+    backTried[it.id] = true;
+    F.fetchBack(it).then(function (p) { if (p) done(); }, function () { /* без кадру теж добре */ });
+  }
+  function heroData(r) { return ' data-mt="' + r.mt + '" data-tid="' + r.tid + '" data-title="' + esc(r.title) + '" data-year="' + esc(r.year) + '" data-poster="' + esc(r.poster) + '" data-back="' + esc(r.back) + '"'; }
+  function heroCat() {
+    var def = F.collDefs(ui.homeMt)[0], st = def && shelfState(def);
+    var picks = st && st.items ? vis(st.items).filter(function (r) { return r.back && !(F.isNope(r.mt, r.tid) && !F.tmdbStatus(r.mt, r.tid)); }).slice(0, 5) : [];
+    if (!picks.length) return st && !st.loading ? '' : '<section class="bb wait" data-hero aria-hidden="true"></section>';
+    if (ui.heroKey !== def.id) { ui.heroKey = def.id; ui.heroIx = 0; }
+    var ix = Math.min(ui.heroIx || 0, picks.length - 1), r = picks[ix], s = F.tmdbStatus(r.mt, r.tid), im = F.imdbFor(r.mt, r.tid), d = heroData(r);
+    var pill = im != null ? '<span class="pill">IMDb ' + im.toFixed(1) + '</span>' : r.vote ? '<span class="pill mt">TMDB ' + r.vote.toFixed(1) + '</span>' : '';
+    var meta = [r.mt === 'tv' ? 'Серіал' : ui.homeMt === 'toon' ? 'Мультфільм' : 'Фільм', r.year].filter(Boolean).join(', ');
+    var add = s && ST_IC[s] ? '<span class="bb-st">' + ic(ST_IC[s][0], 'sm') + ST_IC[s][1] + '</span>' : '<button class="btn ghost" data-act="catadd"' + d + '>' + ic('plus', 'sm') + 'В обране</button>';
+    var th = picks.length > 1 ? '<div class="bb-th" role="group" aria-label="Інші з добірки">' + picks.map(function (x, i) { return '<button type="button" data-act="heropick" data-i="' + i + '" aria-pressed="' + (i === ix) + '" aria-label="' + esc(x.title) + '" title="' + esc(x.title) + '" style="background-image:url(\'' + esc(F.tmdbImg(x.back, 'w300')) + '\')"></button>'; }).join('') + '</div>' : '';
+    return '<section class="bb" data-hero aria-label="' + esc(def.title) + '"><div class="bb-img" style="background-image:url(\'' + esc(F.tmdbImg(r.back, 'w1280')) + '\')"></div><div class="bb-in"><p class="bb-l">' + esc(def.title) + '</p><h2 class="bb-t">' + esc(r.title) + '</h2><p class="bb-m">' + pill + '<span>' + esc(meta) + '</span></p>' + (r.plot ? '<p class="bb-p">' + esc(r.plot) + '</p>' : '') +
+      '<div class="bb-a"><button class="btn" data-act="cat"' + d + '>Детальніше</button>' + add + '</div></div>' + th + '</section>';
+  }
+  function heroMine() {
+    var it = F.list('watching')[0]; if (!it) return '';
+    var back = F.backOf(it.id), nx = F.nextForMe(it), r = it.ratings;
+    needBack(it, paintHero);
+    var pill = r.imdb != null ? '<span class="pill">IMDb ' + r.imdb.toFixed(1) + '</span>' : '';
+    var meta = [typeLabel(it.type), it.year, it.runtime ? F.fmtMinutes(it.runtime) : ''].filter(Boolean).join(', ');
+    var plot = it.plotUk || it.plot || '';
+    var img = back ? '<div class="bb-img" style="background-image:url(\'' + esc(F.tmdbImg(back, 'w1280')) + '\')"></div>' : '<div class="bb-img soft" style="' + (it.poster ? 'background-image:url(\'' + esc(it.poster) + '\')' : '') + '"></div>';
+    return '<section class="bb glow" data-hero style="--h:' + hue(it.id) + '" aria-label="Продовжити перегляд">' + img + '<div class="bb-in"><p class="bb-l">Продовжити перегляд' + (nx ? ', далі ' + F.epCode(nx) : '') + '</p><h2 class="bb-t">' + esc(it.titleUk || it.title) + '</h2><p class="bb-m">' + pill + '<span>' + esc(meta) + '</span></p>' + (plot ? '<p class="bb-p">' + esc(plot) + '</p>' : '') +
+      '<div class="bb-a"><button class="btn" data-act="open" data-id="' + it.id + '">Відкрити</button><button class="btn ghost" data-act="finish" data-id="' + it.id + '">' + ic('check', 'sm') + 'Завершив</button></div></div>' + (back ? '' : '<div class="bb-poster">' + posterHtml(it.poster, it.title) + '</div>') + '</section>';
+  }
+  function heroHtml() {
+    if (!isDesktop()) return '';
+    if (ui.homeView === 'mine') return heroMine();
+    return F.tmdbKeyOf() && !(ui.homeGenre && ui.homeMt !== 'toon') ? heroCat() : '';
+  }
+  function paintHero() {
+    var box = app && app.querySelector('[data-hero]'); if (!box || ui.tab !== 'home') return;
+    var h = heroHtml(); if (h) box.outerHTML = h; else box.remove();
   }
   function loadShelf(def) {
     var tok = ui.cat.token, st = ui.cat.sh[def.id] = { loading: true, items: null, more: false, error: null };
@@ -182,6 +225,7 @@
     var kk = F.tmdbKeyOf(); if (ui.cat.forKey !== kk) { ui.cat.forKey = kk; ui.cat.sh = {}; ui.cat.token++; }
     var h = '<div class="page-h"><h1 class="logo"><i></i>Kinoman</h1></div>';
     var mine = ui.homeView === 'mine';
+    h += heroHtml();
     h += '<div class="hv" role="tablist" aria-label="Головна">' + [['mine', 'Моє'], ['cat', 'Каталог']].map(function (v) { return '<button type="button" role="tab" data-act="homeview" data-v="' + v[0] + '" aria-selected="' + (ui.homeView === v[0]) + '">' + v[1] + '</button>'; }).join('') + '</div>';
     if (mine) {
       var body0 = newsHtml() + shelfHtml('Дивлюсь зараз', F.list('watching').slice(0, 12), 'watching') + marSection() + soonHtml() + F.colList().map(function (c) { return plainShelf(c.name, F.colItems(c.id)); }).join('');
@@ -782,7 +826,9 @@
         (sh.error ? '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(sh.error)) + '<p style="margin:10px 0 0"><button class="btn sm" data-act="retry">Спробувати ще раз</button></p></div></div>' : '<div class="spin" role="status" aria-label="Завантаження"></div>') + '</div>';
     }
     var r = it.ratings, tr = sheetTr(sh, lib, it);
-    var h = hdr + '<div class="hero glow" style="--h:' + hue(it.id) + '"><div class="bg" style="' + (it.poster ? 'background-image:url(\'' + esc(it.poster) + '\')' : '') + '"></div><div class="in">' + posterHtml(it.poster, it.title) + '<div class="info"><h3>' + esc(tr.titleUk || it.title) + '</h3><div class="meta">' + (tr.titleUk && tr.titleUk !== it.title ? esc(it.title) + '<br>' : '') + esc(typeLabel(it.type)) + (it.year ? ', ' + esc(it.year) : '') + (it.runtime ? '<br>' + esc(F.fmtMinutes(it.runtime)) + (it.type === 'series' ? ' за серію' : '') : '') + (it.rated ? '<br>' + esc(it.rated) : '') + '</div></div></div></div><div class="body">';
+    var bk = isDesktop() ? F.backOf(it.id) : '';
+    if (lib) needBack(lib, function () { if (ui.sheet === sh) renderSheet(); });
+    var h = hdr + '<div class="hero glow' + (bk ? ' has-back' : '') + '" style="--h:' + hue(it.id) + '">' + (bk ? '<div class="bd" style="background-image:url(\'' + esc(F.tmdbImg(bk, 'w1280')) + '\')"></div>' : '') + '<div class="bg" style="' + (it.poster ? 'background-image:url(\'' + esc(it.poster) + '\')' : '') + '"></div><div class="in">' + posterHtml(it.poster, it.title) + '<div class="info"><h3>' + esc(tr.titleUk || it.title) + '</h3><div class="meta">' + (tr.titleUk && tr.titleUk !== it.title ? esc(it.title) + '<br>' : '') + esc(typeLabel(it.type)) + (it.year ? ', ' + esc(it.year) : '') + (it.runtime ? '<br>' + esc(F.fmtMinutes(it.runtime)) + (it.type === 'series' ? ' за серію' : '') : '') + (it.rated ? '<br>' + esc(it.rated) : '') + '</div></div></div></div><div class="body">';
     h += '<div class="scores"><div class="score imdb"><div class="v">' + (r.imdb != null ? r.imdb.toFixed(1) + '<small>/10</small>' : '—') + '</div><div class="n">IMDb' + (r.votes ? ', ' + esc(r.votes) : '') + '</div></div>' +
       '<div class="score ' + scoreClass('rt', r.rt) + '"><div class="v">' + (r.rt != null ? r.rt + '<small>%</small>' : '—') + '</div><div class="n">Rotten Tomatoes</div></div>' +
       '<div class="score ' + scoreClass('meta', r.meta) + '"><div class="v">' + (r.meta != null ? r.meta + '<small>/100</small>' : '—') + '</div><div class="n">Metacritic</div></div></div>';
@@ -1084,11 +1130,12 @@
         hideSugg(); var qb = $('#q'); if (qb && document.activeElement === qb) qb.blur();
         var ck = 'cat' + el.dataset.tid; if (ui.busy[ck]) return; ui.busy[ck] = true; toast('Відкриваємо…');
         try {
-          var imdb0 = await F.tmdbImdbId(el.dataset.mt, el.dataset.tid); toastEl.classList.remove('show'); if (ui.sheet && !ui.sheet.wheel) pushCurrent();
+          var imdb0 = await F.tmdbImdbId(el.dataset.mt, el.dataset.tid); if (el.dataset.back) F.setBack(imdb0, el.dataset.back); toastEl.classList.remove('show'); if (ui.sheet && !ui.sheet.wheel) pushCurrent();
           openSheet(imdb0, { id: imdb0, title: el.dataset.title, year: el.dataset.year, type: el.dataset.mt === 'tv' ? 'series' : 'movie', poster: F.tmdbImg(el.dataset.poster, 'w342') });
         } catch (e) { toast(F.describeError(e)); }
         delete ui.busy[ck]; break;
       }
+      case 'heropick': ui.heroIx = Number(el.dataset.i) || 0; paintHero(); break;
       case 'type': ui.type = el.dataset.type; if (ui.q.trim() && ui.searched) doSearch(false); else render(); break;
       case 'more': doSearch(true); break;
       case 'open': {
@@ -1335,6 +1382,9 @@
       if (!ui.sheet && e.key >= '1' && e.key <= String(TABS.length)) { setTab(TABS[Number(e.key) - 1][0]); }
     });
     initDesktop();
+    // ширина вікна перетнула межу телефон/ПК: перемальовуємо (банер є лише на ПК)
+    var mq = window.matchMedia && window.matchMedia('(min-width:1024px)'); if (mq && mq.addEventListener) mq.addEventListener('change', function () { render(); });
+    window.addEventListener('scroll', function () { document.documentElement.classList.toggle('scrolled', window.scrollY > 24); }, { passive: true });
     render();
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(function () { });
   }

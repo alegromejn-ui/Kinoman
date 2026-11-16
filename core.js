@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v38';
+  var VERSION = 'v39';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -195,6 +195,22 @@
   function tmdbKeyOf() { return (S.tmdbKey || '').trim(); }
   function setTmdbKey(k) { S.tmdbKey = String(k || '').trim().slice(0, 600); catCache = {}; save(); }
   function tmdbImg(path, size) { return imgPath(path) ? 'https://image.tmdb.org/t/p/' + (size || 'w185') + path : ''; }
+  // Широкі кадри для ПК: окремий невеликий кеш у цьому браузері (не входить у копію даних і синхронізацію)
+  var backs = null;
+  function backsLoad() { if (backs) return backs; try { backs = JSON.parse(localStorage.getItem('kinoman_backs') || '{}'); } catch (e) { backs = null; } if (!backs || typeof backs !== 'object' || Array.isArray(backs)) backs = {}; return backs; }
+  function backOf(id) { return imgPath(backsLoad()[id]); }
+  function backKnown(id) { return Object.prototype.hasOwnProperty.call(backsLoad(), id); }
+  function setBack(id, path) {
+    if (!isId(id)) return; var b = backsLoad(), p = imgPath(path); if (b[id] === p) return; b[id] = p;
+    var ks = Object.keys(b); if (ks.length > 900) ks.slice(0, ks.length - 900).forEach(function (k) { delete b[k]; });
+    try { localStorage.setItem('kinoman_backs', JSON.stringify(b)); } catch (e) { /* лише на цей сеанс */ }
+  }
+  async function fetchBack(it) {
+    if (!it || !isId(it.id)) return ''; if (backKnown(it.id) || !tmdbKeyOf()) return backOf(it.id);
+    if (it.tmdbId > 0 && (it.mt === 'movie' || it.mt === 'tv')) { var d = await tmdb('/' + it.mt + '/' + it.tmdbId, { language: 'uk-UA' }); setBack(it.id, d && d.backdrop_path); }
+    else { var f = await tmdb('/find/' + it.id, { external_source: 'imdb_id', language: 'uk-UA' }), mv = (f && f.movie_results) || [], tv = (f && f.tv_results) || [], hit = (it.type === 'series' ? tv[0] : mv[0]) || mv[0] || tv[0]; setBack(it.id, hit && hit.backdrop_path); }
+    return backOf(it.id);
+  }
   async function tmdb(path, params) {
     var key = tmdbKeyOf(); if (!key) throw err('NEED_TMDB');
     var q = []; Object.keys(params || {}).forEach(function (k) { q.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k])); });
@@ -229,6 +245,7 @@
     if (!hit || !(hit.id > 0)) return { none: true };
     var mt = pickTv ? 'tv' : 'movie';
     var d = await tmdb('/' + mt + '/' + hit.id, { language: 'uk-UA', append_to_response: 'credits,recommendations,videos', include_video_language: 'uk,en,null' });
+    setBack(it.id, d.backdrop_path || hit.backdrop_path);
     var cast = cleanCast(((d.credits && d.credits.cast) || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); }).slice(0, 14).map(function (c) { return { id: c.id, name: c.name, character: c.character, photo: c.profile_path }; }));
     var recs = cleanRecs(((d.recommendations && d.recommendations.results) || []).filter(function (r) { return r && r.poster_path; }).slice(0, 14).map(function (r) { var rm = r.media_type === 'tv' || (!r.media_type && mt === 'tv') ? 'tv' : 'movie'; return { tid: r.id, mt: rm, title: r.title || r.name, year: yearOf(r.release_date || r.first_air_date), poster: r.poster_path }; }));
     var title = clean(mt === 'tv' ? d.name : d.title), orig = clean(mt === 'tv' ? d.original_name : d.original_title);
@@ -393,7 +410,7 @@
       if (drop && drop.indexOf(r.original_language) >= 0) return false;
       return !(skip && Array.isArray(r.genre_ids) && r.genre_ids.some(function (g) { return skip.indexOf(g) >= 0; }));
     }).map(function (r) {
-      var v = Number(r.vote_average); return { tid: Math.floor(r.id), mt: mt, title: clean(r.title || r.name), year: yearOf(r.release_date || r.first_air_date), poster: r.poster_path, vote: v > 0 ? round1(v) : null };
+      var v = Number(r.vote_average); return { tid: Math.floor(r.id), mt: mt, title: clean(r.title || r.name), year: yearOf(r.release_date || r.first_air_date), poster: r.poster_path, vote: v > 0 ? round1(v) : null, back: imgPath(r.backdrop_path), plot: clean(r.overview).slice(0, 420) };
     });
   }
   // Одна добірка, сторінка за сторінкою (до 10 сторінок, по ~20 фільмів)
@@ -1176,6 +1193,7 @@
     getItem: getItem, setStatus: setStatus, setMyRating: setMyRating, setNote: setNote, removeItem: removeItem, restoreItem: restoreItem, refresh: refresh,
     toggleEpisode: toggleEpisode, setSeasonWatched: setSeasonWatched, seasonProgress: seasonProgress, watchedCount: watchedCount,
     list: list, genres: genres, randomPick: randomPick, stats: stats, fmtMinutes: fmtMinutes, SORTS: SORTS, brief: brief,
+    backOf: backOf, backKnown: backKnown, setBack: setBack, fetchBack: fetchBack,
     exportJSON: exportJSON, importJSON: importJSON, isId: isId, normalizeState: normalizeState, normalizeItem: normalizeItem, api: api, epKey: epKey
   });
   init();
