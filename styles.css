@@ -979,7 +979,7 @@ h2 .cnt{font:600 13px/1 var(--font);color:var(--muted);margin-left:8px;letter-sp
   .coll .bak-acts{gap:14px;margin:18px 0}
   .coll .btn.sm{min-height:calc(53.2*var(--u));padding:0 calc(22.5*var(--u));font-size:calc(18.2*var(--u));border-radius:14px;gap:10px}
   .coll .btn.sm svg.ic{width:calc(23.4*var(--u));height:calc(23.4*var(--u))}
-  .coll .tgrid{grid-template-columns:repeat(auto-fill,minmax(calc(224.0*var(--u)),1fr));gap:calc(36.4*var(--u)) calc(26.4*var(--u));margin-top:26px}
+  .coll .tgrid{grid-template-columns:repeat(auto-fill,minmax(calc(196*var(--u)),1fr));gap:calc(32*var(--u)) calc(24*var(--u));margin-top:26px}
   .coll .tile .name{font-size:calc(18.85*var(--u));margin-top:14px;line-height:1.25}
   .coll .tile .yr{font-size:calc(16.25*var(--u));margin-top:4px}
   .coll .tile .poster{border-radius:calc(14.4*var(--u))}
@@ -988,7 +988,7 @@ h2 .cnt{font:600 13px/1 var(--font);color:var(--muted);margin-left:8px;letter-sp
   .coll .qadd,.coll .qin{top:calc(11.2*var(--u));right:calc(11.2*var(--u));width:calc(47.6*var(--u));height:calc(47.6*var(--u))}
   .coll .qnope{top:calc(69.6*var(--u));right:calc(14.0*var(--u));width:calc(42.0*var(--u));height:calc(42.0*var(--u))}
   .coll .qadd svg.ic,.coll .qin svg.ic,.coll .qnope svg.ic{width:calc(25.2*var(--u));height:calc(25.2*var(--u))}
-  .coll .rk{font-size:calc(98.8*var(--u))}
+  .coll .rk{font-size:calc(84*var(--u))}
   .coll .fine,.coll .ok,.coll .er-t{font-size:calc(18.2*var(--u))}
   .sheetbar button{width:calc(48px*1.2);height:calc(48px*1.2)}
   .sheetbar button svg.ic{width:28px;height:28px}
