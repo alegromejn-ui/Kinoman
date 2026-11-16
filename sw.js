@@ -1,13 +1,14 @@
 /* Сервісний воркер: каркас додатка відкривається без інтернету.
    Сторінка береться з мережі (щоб приходили оновлення), а коли мережі немає, з кешу.
    Постери з інших адрес кешуються окремо (кеш зображень), щоб вони відкривалися й без інтернету. */
-const VERSION = 'kinoman-v42';
+const VERSION = 'kinoman-v43';
 const IMG = 'kinoman-img';
 const IMG_MAX = 400;
 const IMG_HOSTS = ['m.media-amazon.com', 'image.tmdb.org'];
 const SHELL = ['./', 'index.html', 'styles.css', 'core.js', 'ui.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png',
   'onest-cyrillic-ext-wght-normal.woff2', 'onest-cyrillic-wght-normal.woff2', 'onest-latin-ext-wght-normal.woff2', 'onest-latin-wght-normal.woff2',
-  'unbounded-cyrillic-ext-wght-normal.woff2', 'unbounded-cyrillic-wght-normal.woff2', 'unbounded-latin-wght-normal.woff2'];
+  'unbounded-cyrillic-ext-wght-normal.woff2', 'unbounded-cyrillic-wght-normal.woff2', 'unbounded-latin-wght-normal.woff2',
+  'sofia-sans-extra-condensed-cyrillic-wght-normal.woff2', 'sofia-sans-extra-condensed-cyrillic-ext-wght-normal.woff2', 'sofia-sans-extra-condensed-latin-wght-normal.woff2'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
