@@ -554,7 +554,7 @@ kbd{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 
   :root{--bg:#08080B;--surface:#111116;--raised:#1A1A22;--ink:#F5F3F0;--muted:#9B99A8;--line:#26262F;
     --accent:var(--amb);--on-accent:#0A0A0D;--accent-soft:color-mix(in srgb,var(--amb) 16%,transparent);
     --poster:'Sofia Sans Extra Condensed','Onest',system-ui,sans-serif;--display:'Onest',system-ui,sans-serif;
-    --bar:68px;--top:96px;--pad:max(56px,calc((100vw - 1680px)/2));--glow:.2}
+    --bar:68px;--top:96px;--pad:max(56px,calc((100vw - 2300px)/2));--glow:.2}
   html{transition:--amb .8s ease;scrollbar-color:var(--line) transparent;scrollbar-width:thin}
   ::-webkit-scrollbar{width:12px;height:12px}
   ::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px;border:3px solid var(--bg)}
@@ -709,7 +709,7 @@ kbd{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 
 
   /* Картка фільму: окремий екран на все вікно */
   #sheet-root .scrim{align-items:stretch;padding:0;background:rgba(4,4,6,.7)}
-  .sheet{--sp:max(56px,calc((100vw - 1320px)/2));width:100%;max-width:none;height:100vh;height:100dvh;max-height:none;border-radius:0;padding-bottom:96px;animation:sheetin .38s cubic-bezier(.2,.8,.2,1)}
+  .sheet{--sp:var(--pad);width:100%;max-width:none;height:100vh;height:100dvh;max-height:none;border-radius:0;padding-bottom:96px;animation:sheetin .38s cubic-bezier(.2,.8,.2,1)}
   @keyframes sheetin{from{opacity:0;transform:translateY(28px)}}
   .sheetbar button{top:22px;width:48px;height:48px;border-radius:14px;background:rgba(16,16,22,.6)}
   .sheetbar .close{right:28px}.sheetbar .back{left:28px}
@@ -728,11 +728,11 @@ kbd{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 
   .coll h3,.duo h3,.wheel-wrap h3,.phero h3{font:800 68px/.9 var(--poster);letter-spacing:.01em;text-transform:uppercase}
   .sheet .strip,.seasons{margin:0;padding:8px 2px 12px}
   .sheet .chips{margin:0}
-  .plot{font-size:17px;line-height:1.65;max-width:70ch}
+  .plot{font-size:17px;line-height:1.65;max-width:110ch}
   .scores{gap:10px}
   .score{border-radius:14px;padding:16px 8px}
   .ticket{border-radius:18px}
-  .body:has(>.ticket){display:grid;grid-template-columns:minmax(0,1fr) 390px;column-gap:56px;align-items:start}
+  .body:has(>.ticket){display:grid;grid-template-columns:minmax(0,1fr) clamp(390px,26vw,480px);column-gap:64px;align-items:start}
   .body:has(>.ticket)>*{grid-column:1;min-width:0}
   .body:has(>.ticket)>.ticket{grid-column:2;grid-row:1/span 40;position:sticky;top:88px;margin-top:4px}
   .body:has(>.ticket)>.scores{margin-top:4px}
