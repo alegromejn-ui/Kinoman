@@ -554,7 +554,7 @@ kbd{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 
   :root{--bg:#08080B;--surface:#111116;--raised:#1A1A22;--ink:#F5F3F0;--muted:#9B99A8;--line:#26262F;
     --accent:var(--amb);--on-accent:#0A0A0D;--accent-soft:color-mix(in srgb,var(--amb) 16%,transparent);
     --poster:'Sofia Sans Extra Condensed','Onest',system-ui,sans-serif;--display:'Onest',system-ui,sans-serif;
-    --bar:56px;--top:104px;--pad:max(56px,calc((100vw - 1680px)/2));--glow:.2}
+    --bar:68px;--top:96px;--pad:max(56px,calc((100vw - 1680px)/2));--glow:.2}
   html{transition:--amb .8s ease;scrollbar-color:var(--line) transparent;scrollbar-width:thin}
   ::-webkit-scrollbar{width:12px;height:12px}
   ::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px;border:3px solid var(--bg)}
@@ -567,18 +567,15 @@ kbd{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 
   #app{max-width:none;margin:0;padding:var(--top) var(--pad) 96px}
   .nohero{height:0}
 
-  /* Навігація: скляна капсула, що плаває над сторінкою */
-  #tabs{left:50%;top:14px;bottom:auto;transform:translateX(-50%);width:min(1240px,calc(100% - 48px));max-width:none;height:var(--bar);align-items:center;gap:2px;padding:0 8px 0 20px;border-radius:18px;background:rgba(16,16,22,.56);backdrop-filter:blur(24px) saturate(1.6);-webkit-backdrop-filter:blur(24px) saturate(1.6);box-shadow:inset 0 0 0 1px rgba(255,255,255,.09),0 24px 60px -24px #000;transition:background .3s}
-  .scrolled #tabs{background:rgba(14,14,19,.93)}
-  #tabs button,#tabs button[aria-current="page"]{flex:none;height:40px;padding:0 14px;border-radius:12px;background:none;font-size:14.5px;font-weight:600;color:rgba(255,255,255,.64);transition:color .2s,background .2s}
-  #tabs .brand,#tabs .brand[aria-current="page"]{gap:10px;padding:0 22px 0 0;font:800 28px/1 var(--poster);letter-spacing:.035em;text-transform:uppercase;color:var(--ink)}
+  /* Навігація: проста смуга без рамки; прозора над банером, щільна після прокрутки */
+  #tabs{left:0;right:0;top:0;bottom:auto;transform:none;width:auto;max-width:none;height:var(--bar);align-items:center;gap:4px;padding:0 var(--pad);border-radius:0;background:linear-gradient(180deg,rgba(8,8,11,.88),rgba(8,8,11,0));backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:none;transition:background .3s}
+  .scrolled #tabs{background:rgba(8,8,11,.94);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+  #tabs button,#tabs button[aria-current="page"]{flex:none;height:40px;padding:0 16px;border-radius:20px;background:none;font-size:15.5px;font-weight:600;color:rgba(255,255,255,.72);transition:color .2s,background .2s}
+  #tabs .brand,#tabs .brand[aria-current="page"]{gap:10px;padding:0 20px 0 0;font:800 30px/1 var(--poster);letter-spacing:.035em;text-transform:uppercase;color:var(--ink)}
   #tabs .brand i{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 14px var(--accent)}
-  #tabs .nl[aria-current="page"]{color:var(--ink);background:rgba(255,255,255,.1)}
-  #tabs .spot-btn{margin-left:auto;width:300px;justify-content:flex-start;gap:10px;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);font-weight:500;color:rgba(255,255,255,.52)}
-  #tabs .spot-btn span:not(.cnt){display:inline}
-  #tabs .spot-btn kbd{margin-left:auto}
-  #tabs .ico,#tabs .ico[aria-current="page"]{width:40px;padding:0;margin-left:4px}
-  #tabs .ico[aria-current="page"]{color:var(--ink);background:rgba(255,255,255,.1)}
+  #tabs .nl[aria-current="page"]{color:#fff;font-weight:700;background:rgba(255,255,255,.13)}
+  #tabs .ico,#tabs .ico[aria-current="page"]{width:40px;padding:0;color:#fff}
+  #tabs .ico.last{margin-left:auto}
   #toast{bottom:28px;border-radius:14px}
 
   /* Заголовки афішним шрифтом */
@@ -603,6 +600,7 @@ kbd{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 
   .bb-in>*{animation:bbup .7s cubic-bezier(.2,.8,.2,1) both}
   .bb-in>:nth-child(2){animation-delay:.05s}.bb-in>:nth-child(3){animation-delay:.1s}.bb-in>:nth-child(4){animation-delay:.15s}.bb-in>:nth-child(5){animation-delay:.2s}
   @keyframes bbup{from{opacity:0;transform:translateY(22px)}}
+  .bb.still .bb-img,.bb.still .bb-in>*{animation:none}
   .bb-l{margin:0 0 12px;font-size:15px;font-weight:700;color:var(--accent)}
   .bb .bb-t{margin:0 0 20px;font:800 clamp(68px,8.8vw,156px)/.86 var(--poster);letter-spacing:0;text-transform:uppercase;text-wrap:balance;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;padding-top:.06em}
   .bb-m{display:flex;align-items:center;gap:12px;margin:0 0 14px;font-size:16px;color:rgba(255,255,255,.84)}
@@ -647,16 +645,19 @@ kbd{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 
   .week>:only-child{grid-column:1/-1}
   .week .news,.week .soon{margin:0}
   .week .sec-h{margin-top:0}
+  .page-h + .week{margin:0 0 34px}
+  .bb + .catbar,.bb + .advice{margin-top:28px}
+  .bb + .catbar.slim{margin-top:20px}
   .mars{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:0 12px;margin-top:44px}
   .mars>:not(.marrow){grid-column:1/-1}
   .advice{margin-top:44px;border-radius:18px}
 
   /* Панель каталогу: тип, жанри, перемикачі; липне під навігацією */
-  .catbar{position:sticky;top:82px;z-index:15;display:grid;grid-template-columns:auto 1fr;align-items:center;gap:10px 16px;margin:48px -14px 0;padding:12px 14px;border-radius:18px;background:rgba(12,12,16,.74);backdrop-filter:blur(22px) saturate(1.5);-webkit-backdrop-filter:blur(22px) saturate(1.5);box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+  .catbar{position:sticky;top:calc(var(--bar) + 4px);z-index:15;display:flex;align-items:flex-start;gap:10px 16px;margin:40px -14px 0;padding:12px 14px;border-radius:18px;background:rgba(12,12,16,.74);backdrop-filter:blur(22px) saturate(1.5);-webkit-backdrop-filter:blur(22px) saturate(1.5);box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
   .catbar .seg{margin:0;min-width:0}
-  .catbar-r{display:flex;gap:8px;justify-self:end;grid-column:2;grid-row:1}
-  .catbar .chips{grid-column:1/-1;grid-row:2;padding:0}
-  .catbar .chips:empty{display:none}
+  .catbar-r{display:flex;gap:8px;flex:none;margin-left:auto}
+  .catbar .chips{flex:1;padding:0}
+  .catbar.slim{position:static;margin:28px 0 -14px;padding:0;background:none;backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:none}
   .catbar .chip{min-height:32px;padding:0 12px;font-size:13.5px}
   .nohero + .catbar{margin-top:0}
 
