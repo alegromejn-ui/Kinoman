@@ -1006,3 +1006,4 @@ h2 .cnt{font:600 13px/1 var(--font);color:var(--muted);margin-left:8px;letter-sp
   .hero .poster{width:200px}
   .hero h3{font-size:clamp(52px,5.2vw,92px)}
 }
+.tgrid>.tail-hide{display:none}

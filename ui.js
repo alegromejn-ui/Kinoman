@@ -1052,6 +1052,18 @@
     return h + '</div>';
   }
   // ПК: у згорнутій сітці лишаємо рівно два повні рядки, щоб другий рядок не був напівпорожній
+  // Поки є «Показати ще», неповний останній ряд ховаємо: він з'явиться разом із наступною порцією
+  function tailGrids() {
+    Array.prototype.forEach.call(document.querySelectorAll('.tgrid'), function (g) {
+      var kids = g.children, n = kids.length, i, nx = g.nextElementSibling, more = !!(nx && nx.classList.contains('morewrap'));
+      for (i = 0; i < n; i++) kids[i].classList.remove('tail-hide');
+      if (!more) return;
+      var cols = String(getComputedStyle(g).gridTemplateColumns || '').split(' ').filter(Boolean).length; if (!(cols > 1) || n <= cols) return;
+      for (i = n - (n % cols); i < n; i++) kids[i].classList.add('tail-hide');
+    });
+  }
+  var tailT = 0;
+  function tailSoon() { if (tailT) return; tailT = requestAnimationFrame(function () { tailT = 0; tailGrids(); }); }
   function fitGrids() {
     if (!isDesktop()) return;
     Array.prototype.forEach.call(sheetRoot.querySelectorAll('.tgrid[data-fit]'), function (g) {
@@ -1499,7 +1511,7 @@
     });
     document.addEventListener('scroll', function (e) { if (peekFor || peekPend) peekHide(); if (cur) { if (e.target === cur) place(); else { cur = null; place(); } } }, true);
     var fitT = 0;
-    window.addEventListener('resize', function () { cur = null; place(); clearTimeout(fitT); fitT = setTimeout(function () { if (ui.sheet && ui.sheet.person) renderSheet(); }, 200); });
+    window.addEventListener('resize', function () { tailSoon(); cur = null; place(); clearTimeout(fitT); fitT = setTimeout(function () { if (ui.sheet && ui.sheet.person) renderSheet(); }, 200); });
   }
 
   // ---------- Події ----------
@@ -1805,6 +1817,7 @@
 
   function init() {
     app = $('#app'); tabsEl = $('#tabs'); sheetRoot = $('#sheet-root'); toastEl = $('#toast');
+    if (window.MutationObserver) { var tmo = new MutationObserver(tailSoon); tmo.observe(app, { childList: true, subtree: true }); tmo.observe(sheetRoot, { childList: true, subtree: true }); }
     F.init();
     F.on(function () { render(); });
     // тиха синхронізація під час відкриття й коли додаток ховається

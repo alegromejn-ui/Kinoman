@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v53';
+  var VERSION = 'v54';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
