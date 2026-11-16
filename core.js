@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var KEY = 'kino_state_v1';
-  var VERSION = 'v43';
+  var VERSION = 'v44';
   var FB = window.FB = {
     fetch: function (u, o) { return window.fetch(u, o); },
     jsonp: jsonpRequest,
@@ -326,7 +326,7 @@
     var L = [], yAgo = ymd(FB.now() - 365 * 86400000);
     function add(id, title, mt, path, p, toon, limit) { L.push({ id: id, title: title, mt: mt, path: path, p: p || {}, toon: !!toon, limit: limit || 0 }); }
     if (cat === 'tv') {
-      add('t-trend', 'У тренді цього тижня', 'tv', '/trending/tv/week');
+      add('t-trend', 'Топ-10 серіалів тижня', 'tv', '/trending/tv/week', {}, 0, 10); L[L.length - 1].top = true;
       add('t-now', 'Виходять зараз', 'tv', '/tv/on_the_air');
       add('t-top', 'Топ 100 серіалів за рейтингом', 'tv', '/discover/tv', best(1000), 0, 100);
       add('t-ua', 'Українські серіали', 'tv', '/discover/tv', { with_origin_country: 'UA' });
@@ -362,7 +362,7 @@
       add('c-am', 'Аніме: фільми', 'movie', '/discover/movie', best(300, { with_genres: '16', with_original_language: 'ja' }), 1);
       add('c-as', 'Аніме: серіали', 'tv', '/discover/tv', best(300, { with_genres: '16', with_original_language: 'ja' }), 1);
     } else {
-      add('m-trend', 'У тренді цього тижня', 'movie', '/trending/movie/week');
+      add('m-trend', 'Топ-10 фільмів тижня', 'movie', '/trending/movie/week', {}, 0, 10); L[L.length - 1].top = true;
       add('m-now', 'Зараз у кінотеатрах', 'movie', '/movie/now_playing', { region: 'UA' });
       add('m-top', 'Топ 100 фільмів за рейтингом', 'movie', '/discover/movie', best(5000), 0, 100);
       add('m-ua', 'Українське кіно', 'movie', '/discover/movie', { with_origin_country: 'UA', without_genres: '16' });
@@ -385,6 +385,11 @@
       add('m-act', 'Найкращі бойовики', 'movie', '/discover/movie', best(2000, { with_genres: '28' }));
       add('m-dra', 'Найкращі драми', 'movie', '/discover/movie', best(3000, { with_genres: '18' }));
     }
+    // Новорічні: взимку (листопад–січень) стоять одразу після топу, решту року нижче
+    var mon = new Date(FB.now()).getMonth(), season = mon >= 10 || mon === 0, ny = null;
+    if (cat === 'toon') ny = { id: 'c-ny', title: 'Новорічні мультфільми', mt: 'movie', path: '/discover/movie', p: { with_genres: '16', 'vote_count.gte': 80 }, toon: true, limit: 0 };
+    else if (cat !== 'tv') ny = { id: 'm-ny', title: 'Новорічні й різдвяні фільми', mt: 'movie', path: '/discover/movie', p: { 'vote_count.gte': 300 }, toon: false, limit: 0 };
+    if (ny) { ny.kw = ['christmas', "new year's eve"]; ny.drop = ['ru']; L.splice(season ? 1 : Math.min(L.length, 9), 0, ny); }
     return L;
   }
   // Топові студії анімації (ідентифікатори компаній TMDB); вибір студії не зачіпає фільтр «Без аніме й Азії»
@@ -437,12 +442,30 @@
     save(true);
     return { items: items.filter(Boolean).map(function (x) { return ext(x, {}); }), more: page * 20 < OSCARS.length };
   }
+  // Теми TMDB шукаємо за назвою (а не за номером) і запам’ятовуємо в цьому браузері
+  var kwMem = null;
+  async function kwIds(names) {
+    if (!kwMem) { try { kwMem = JSON.parse(localStorage.getItem('kinoman_kw') || '{}') || {}; } catch (e) { kwMem = {}; } }
+    var out = [], dirty = false;
+    for (var i = 0; i < names.length; i++) {
+      var n = names[i];
+      if (!(kwMem[n] > 0)) {
+        var d = await tmdb('/search/keyword', { query: n, page: 1 }), rs = Array.isArray(d.results) ? d.results : [];
+        var hit = rs.filter(function (r) { return r && String(r.name || '').toLowerCase() === n; })[0];
+        if (hit && hit.id > 0) { kwMem[n] = Math.floor(hit.id); dirty = true; }
+      }
+      if (kwMem[n] > 0) out.push(kwMem[n]);
+    }
+    if (dirty) { try { localStorage.setItem('kinoman_kw', JSON.stringify(kwMem)); } catch (e) { /* лише на цей сеанс */ } }
+    return out;
+  }
   async function collection(id, page, yr) {
     var def = collDef(id); if (!def) return { items: [], more: false };
     if (def.oscar) { page = Math.max(1, Math.min(10, Math.floor(Number(page)) || 1)); var ok0 = 'c:' + id + ':' + page, oc = catCache[ok0]; if (oc && FB.now() - oc.t < 3600000) return oc.res; var ores = await oscarPage(page); catCache[ok0] = { t: FB.now(), res: ores }; return ores; }
     page = Math.max(1, Math.min(10, Math.floor(Number(page)) || 1)); if (def.limit) page = 1;
     var span = def.limit ? yearSpan(yr) : null;
-    var drop = def.toon && !def.studio && west ? ASIA : null, ck = 'c:' + id + ':' + page + (span ? ':' + span.key : '') + (drop ? ':w' : ''), c = catCache[ck]; if (c && FB.now() - c.t < 3600000) return c.res;
+    var drop = def.toon && !def.studio && west ? ASIA : null; if (def.drop) drop = (drop || []).concat(def.drop);
+    var ck = 'c:' + id + ':' + page + (span ? ':' + span.key : '') + (drop ? ':w' : ''), c = catCache[ck]; if (c && FB.now() - c.t < 3600000) return c.res;
     var p = ext({ language: 'uk-UA', page: page, include_adult: 'false' }, def.p), disc = /^\/discover\//.test(def.path), skip = def.toon ? null : EXCL[def.mt];
     if (span) {
       p = ext(p, dates(def.mt, span.from, span.to));
@@ -450,6 +473,7 @@
       var vc = Number(p['vote_count.gte']); if (vc > 0) p['vote_count.gte'] = Math.max(30, Math.round(vc / (span.dec ? 3 : 8)));
     }
     if (disc) { if (!p.sort_by) p.sort_by = 'popularity.desc'; if (skip) p.without_genres = skip.join('|'); }
+    if (def.kw) { var kws = await kwIds(def.kw); if (!kws.length) return { items: [], more: false }; p.with_keywords = kws.join('|'); }
     var res;
     if (def.limit) {
       // «Топ N»: кілька сторінок за раз, з нумерацією місць
@@ -1091,6 +1115,57 @@
     var d = await tmdb('/search/collection', { query: q, language: 'uk-UA', page: 1 });
     return (Array.isArray(d.results) ? d.results : []).filter(function (r) { return r && r.id > 0 && clean(r.name); }).slice(0, 6).map(function (r) { return { cid: Math.floor(r.id), name: collName(r.name) || clean(r.name).slice(0, 80), poster: imgPath(r.poster_path) }; });
   }
+  // Готові кіносаги: колекцію TMDB знаходимо за точною назвою, результат зберігаємо в цьому браузері
+  var SAGAS = [['Гаррі Поттер', 'Harry Potter'], ['Володар перснів', 'The Lord of the Rings'], ['Хоббіт', 'The Hobbit'], ['Зоряні війни', 'Star Wars'], ['Месники', 'The Avengers'], ['Пірати Карибського моря', 'Pirates of the Caribbean'],
+    ['Сам удома', 'Home Alone'], ['Матриця', 'The Matrix'], ['Голодні ігри', 'The Hunger Games'], ['Парк Юрського періоду', 'Jurassic Park'], ['Індіана Джонс', 'Indiana Jones'], ['Назад у майбутнє', 'Back to the Future'],
+    ['Джон Вік', 'John Wick'], ['Місія нездійсненна', 'Mission: Impossible'], ['Джеймс Бонд', 'James Bond'], ['Дюна', 'Dune'], ['Аватар', 'Avatar'], ['Темний лицар', 'The Dark Knight'], ['Фантастичні звірі', 'Fantastic Beasts'],
+    ['Форсаж', 'The Fast and the Furious'], ['Людина-павук', 'Spider-Man'], ['Сутінки', 'The Twilight Saga'], ['Хрещений батько', 'The Godfather'], ['Той, хто біжить по лезу', 'Blade Runner'],
+    ['Історія іграшок', 'Toy Story', 1], ['Шрек', 'Shrek', 1], ['Як приборкати дракона', 'How to Train Your Dragon', 1], ['Крижане серце', 'Frozen', 1], ['Льодовиковий період', 'Ice Age', 1], ['Нікчемний я', 'Despicable Me', 1], ['Кунг-фу Панда', 'Kung Fu Panda', 1], ['Тачки', 'Cars', 1], ['Мадагаскар', 'Madagascar', 1], ['Суперсімейка', 'The Incredibles', 1]];
+  var sagaMem = null, sagaBusy = null;
+  function sagaLoad() { if (!sagaMem) { try { sagaMem = JSON.parse(localStorage.getItem('kinoman_sagas') || '{}') || {}; } catch (e) { sagaMem = {}; } } return sagaMem; }
+  function sagaList(toon) {
+    var m = sagaLoad();
+    return SAGAS.filter(function (s) { return !!s[2] === !!toon; }).map(function (s) { var r = m[s[1]]; return { name: s[0], q: s[1], cid: r && r.cid > 0 ? r.cid : 0, back: r ? imgPath(r.back) : '', poster: r ? imgPath(r.poster) : '', miss: !!(r && r.miss) }; }).filter(function (s) { return !s.miss; });
+  }
+  // Довантажує ще не знайдені саги; повертає true, якщо щось змінилось
+  function sagasResolve() {
+    if (sagaBusy) return sagaBusy;
+    var m = sagaLoad(), todo = SAGAS.filter(function (s) { return !m[s[1]]; }); if (!todo.length || !tmdbKeyOf()) return Promise.resolve(false);
+    sagaBusy = (async function () {
+      var n = 0;
+      for (var i = 0; i < todo.length; i++) {
+        try {
+          var q = todo[i][1], d = await tmdb('/search/collection', { query: q, language: 'en-US', page: 1 }), rs = Array.isArray(d.results) ? d.results : [], want = q.toLowerCase() + ' collection';
+          var hit = rs.filter(function (r) { return r && String(r.name || '').toLowerCase() === want; })[0] || rs.filter(function (r) { return r && String(r.name || '').toLowerCase().indexOf(q.toLowerCase()) === 0; })[0];
+          m[q] = hit && hit.id > 0 ? { cid: Math.floor(hit.id), back: imgPath(hit.backdrop_path), poster: imgPath(hit.poster_path) } : { miss: 1 }; n++;
+        } catch (e) { if (e && (e.code === 'TMDB_NETWORK' || e.status === 401 || e.status === 429)) break; }
+      }
+      if (n) { try { localStorage.setItem('kinoman_sagas', JSON.stringify(m)); } catch (e) { /* лише на цей сеанс */ } }
+      return n > 0;
+    })();
+    sagaBusy.then(function () { sagaBusy = null; }, function () { sagaBusy = null; });
+    return sagaBusy;
+  }
+  // Календар: усе з власних списків на days днів уперед (без обмеження кількості)
+  function calendar(days) {
+    var today = ymd(FB.now()), out = [];
+    Object.keys(S.items).forEach(function (k) {
+      var it = S.items[k]; if (it.arch) return;
+      if (it.type === 'series') { var na = it.nextAir; if (na && na.date >= today && daysBetween(today, na.date) <= days && !(it.status === 'seen' && !(it.doneS && na.s > it.doneS))) out.push({ item: it, date: na.date, s: na.s || 0, e: na.e || 0, label: na.s ? 'S' + na.s + 'E' + na.e : 'Нова серія', kind: 'ep' }); }
+      else if (it.status === 'want') { var r = releasedIso(it.released); if (r && r >= today && daysBetween(today, r) <= days) out.push({ item: it, date: r, label: 'Прем’єра', kind: 'prem' }); }
+      if (it.status !== 'seen' && it.planAt && it.planAt >= today && daysBetween(today, it.planAt) <= days) out.push({ item: it, date: it.planAt, label: 'Запланований перегляд', kind: 'plan' });
+    });
+    return out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  }
+  // Дати всіх серій сезону (щоб показати в календарі не лише найближчу)
+  var seasonMem = {};
+  async function seasonDates(it, s) {
+    s = Math.floor(Number(s)); if (!it || !(it.tmdbId > 0) || !(s > 0) || !tmdbKeyOf()) return [];
+    var k = it.tmdbId + ':' + s, c = seasonMem[k]; if (c && FB.now() - c.t < 21600000) return c.eps;
+    var d = await tmdb('/tv/' + it.tmdbId + '/season/' + s, { language: 'uk-UA' });
+    var eps = (Array.isArray(d.episodes) ? d.episodes : []).filter(function (e) { return e && e.episode_number > 0 && /^\d{4}-\d{2}-\d{2}$/.test(String(e.air_date || '')); }).map(function (e) { return { e: Math.floor(e.episode_number), date: e.air_date, name: clean(e.name).slice(0, 80) }; });
+    seasonMem[k] = { t: FB.now(), eps: eps }; return eps;
+  }
   async function aiMarathon(q) {
     q = clean(q).slice(0, 120); if (q.length < 2) return null;
     var o = await geminiJson('Склади кіномарафон для глядача з України за запитом: «' + q + '». Перелічи фільми й серіали франшизи в найкращому порядку перегляду (якщо просять хронологічно — за подіями сюжету, інакше — за виходом). Лише реально існуючі назви, до 40 позицій, без анонсованих, що ще не вийшли. Дай коротку назву марафону українською.',
@@ -1193,7 +1268,7 @@
     getItem: getItem, setStatus: setStatus, setMyRating: setMyRating, setNote: setNote, removeItem: removeItem, restoreItem: restoreItem, refresh: refresh,
     toggleEpisode: toggleEpisode, setSeasonWatched: setSeasonWatched, seasonProgress: seasonProgress, watchedCount: watchedCount,
     list: list, genres: genres, randomPick: randomPick, stats: stats, fmtMinutes: fmtMinutes, SORTS: SORTS, brief: brief,
-    backOf: backOf, backKnown: backKnown, setBack: setBack, fetchBack: fetchBack,
+    backOf: backOf, backKnown: backKnown, setBack: setBack, fetchBack: fetchBack, sagaList: sagaList, sagasResolve: sagasResolve, calendar: calendar, seasonDates: seasonDates, today: function () { return ymd(FB.now()); },
     exportJSON: exportJSON, importJSON: importJSON, isId: isId, normalizeState: normalizeState, normalizeItem: normalizeItem, api: api, epKey: epKey
   });
   init();

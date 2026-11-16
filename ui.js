@@ -112,7 +112,7 @@
   function discOpts(mt, genre, decade, vote) { return { genre: genre === 'anime' ? 0 : Number(genre) || 0, anime: genre === 'anime', decade: Number(decade) || 0, minVote: Number(vote) || 0 }; }
   function discGrid(d) { return '<div data-disc="' + esc(d.key) + '">' + discInner(d) + '</div>'; }
   function discInner(d) {
-    if (d.loading) return '<div class="spin" role="status" aria-label="Завантажуємо"></div>';
+    if (d.loading) return '<div class="tgrid" role="status" aria-label="Завантажуємо">' + skTiles(12) + '</div>';
     if (d.error) return '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(d.error)) + '<p style="margin:10px 0 0"><button class="btn sm" data-act="redisc">Спробувати ще раз</button></p></div></div>';
     var shown = vis(d.items);
     if (!shown.length && !d.more) return emptyHtml('film', 'Нічого не знайшли', d.items.length ? 'Усе знайдене вже переглянуте. Вимкніть «Сховати переглянуте».' : 'Спробуйте м’якші фільтри.');
@@ -151,17 +151,79 @@
       return '<button class="soonrow" data-act="open" data-id="' + x.item.id + '"><span class="sd"><b>' + d.getDate() + '</b><span>' + ['січ', 'лют', 'бер', 'кві', 'тра', 'чер', 'лип', 'сер', 'вер', 'жов', 'лис', 'гру'][d.getMonth()] + '</span></span><span class="st"><b>' + esc(x.item.titleUk || x.item.title) + '</b><span>' + esc(x.label) + '</span></span></button>';
     }).join('') + '</div></section>';
   }
+  function calEntry() { return '<button class="marentry" data-act="cal">' + ic('clock', 'sm') + '<span><b>Календар прем’єр</b><span>Нові серії та фільми з ваших списків на два місяці вперед</span></span>' + ic('right', 'sm') + '</button>'; }
+  // ---------- Календар прем’єр ----------
+  var MON_S = ['січ', 'лют', 'бер', 'кві', 'тра', 'чер', 'лип', 'сер', 'вер', 'жов', 'лис', 'гру'], MON_G = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
+  var WD_S = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'], WD_L = ['понеділок', 'вівторок', 'середа', 'четвер', 'п’ятниця', 'субота', 'неділя'], CAL_DAYS = 62;
+  function isoAdd(iso, n) { var d = new Date(Date.parse(iso + 'T00:00:00Z') + n * 86400000); return d.getUTCFullYear() + '-' + ('0' + (d.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + d.getUTCDate()).slice(-2); }
+  function isoDow(iso) { return (new Date(Date.parse(iso + 'T00:00:00Z')).getUTCDay() + 6) % 7; }
+  function calEntries() {
+    var out = F.calendar(CAL_DAYS), seen = {}; out.forEach(function (x) { seen[x.item.id + '|' + x.date + '|' + x.label] = 1; });
+    Object.keys(ui.calX || {}).forEach(function (id) { var it = F.getItem(id); if (!it) return; ui.calX[id].forEach(function (e) { var lb = 'S' + e.s + 'E' + e.e, k = id + '|' + e.date + '|' + lb; if (!seen[k]) { seen[k] = 1; out.push({ item: it, date: e.date, label: lb, kind: 'ep' }); } }); });
+    return out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  }
+  // Для серіалів довантажуємо дати решти серій сезону, а не лише найближчої
+  function calLoadMore() {
+    var today = F.today(), lim = isoAdd(today, CAL_DAYS); ui.calX = ui.calX || {}; ui.calAsk = ui.calAsk || {};
+    F.calendar(CAL_DAYS).forEach(function (x) {
+      if (x.kind !== 'ep' || !x.s || ui.calAsk[x.item.id]) return; ui.calAsk[x.item.id] = 1;
+      F.seasonDates(x.item, x.s).then(function (eps) {
+        var add = eps.filter(function (e) { return e.date >= today && e.date <= lim && e.e !== x.e; }).map(function (e) { return { date: e.date, s: x.s, e: e.e }; });
+        if (add.length) { ui.calX[x.item.id] = add; if (ui.sheet && ui.sheet.cal) renderSheet(); }
+      }, function () { delete ui.calAsk[x.item.id]; });
+    });
+  }
+  function calHtml() {
+    var es = calEntries(), today = F.today();
+    var h = '<div class="sheetbar"><button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button></div><div class="coll cal"><h3>Календар прем’єр</h3><p class="sub">Нові серії, прем’єри фільмів і заплановані перегляди з ваших списків на два місяці вперед.</p>';
+    if (!es.length) return h + emptyHtml('clock', 'Найближчим часом нічого не виходить', 'Додайте серіали в «Дивлюсь» або ще не випущені фільми в «Обрані», і їхні дати з’являться тут.') + '</div>';
+    var by = {}; es.forEach(function (x) { (by[x.date] = by[x.date] || []).push(x); });
+    var pic = function (it) { return '<span class="cal-p">' + (it.poster ? '<img src="' + esc(it.poster) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') + '</span>'; };
+    var start = isoAdd(today, -isoDow(today)), end = isoAdd(start, 34);
+    h += '<div class="cal-grid"><div class="cal-wd">' + WD_S.map(function (d) { return '<span>' + d + '</span>'; }).join('') + '</div><div class="cal-cells">';
+    for (var i = 0; i < 35; i++) {
+      var d = isoAdd(start, i), p = d.split('-'), dn = Number(p[2]);
+      h += '<div class="cal-c' + (d < today ? ' past' : d === today ? ' today' : '') + '"><span class="cal-d">' + dn + (dn === 1 || i === 0 ? ' ' + MON_S[Number(p[1]) - 1] : '') + '</span>' + (by[d] || []).map(function (x) { return '<button class="cal-e k-' + x.kind + '" data-act="open" data-id="' + x.item.id + '">' + pic(x.item) + '<span class="st"><b>' + esc(x.item.titleUk || x.item.title) + '</b><span>' + esc(x.label) + '</span></span></button>'; }).join('') + '</div>';
+    }
+    h += '</div></div>';
+    var days = Object.keys(by).sort(), later = days.filter(function (d) { return d > end; }).length;
+    h += '<div class="cal-list">' + days.map(function (d, i) {
+      var p = d.split('-'), isLater = d > end, head = isLater && (i === 0 || days[i - 1] <= end) ? '<h2 class="cal-lh">Пізніше</h2>' : '';
+      return head + '<div class="cal-day' + (isLater ? ' later' : '') + '"><p class="cal-dh"><b>' + Number(p[2]) + ' ' + MON_G[Number(p[1]) - 1] + '</b><span>' + WD_L[isoDow(d)] + (d === today ? ', сьогодні' : '') + '</span></p>' + by[d].map(function (x) { return '<button class="soonrow k-' + x.kind + '" data-act="open" data-id="' + x.item.id + '">' + pic(x.item) + '<span class="st"><b>' + esc(x.item.titleUk || x.item.title) + '</b><span>' + esc(x.label) + '</span></span></button>'; }).join('') + '</div>';
+    }).join('') + '</div>';
+    return h + (later ? '' : '') + '</div>';
+  }
   function plainShelf(title, items) {
     if (!items.length) return '';
     return '<section class="shelf"><div class="shelf-h"><h2>' + esc(title) + '</h2><span class="sub">' + items.length + '</span></div><div class="strip">' + items.slice(0, 20).map(tileHtml).join('') + '</div></section>';
   }
   // ---------- Добірки каталогу ----------
   function shelfState(def) { return ui.cat.sh[def.id]; }
+  // Силуети постерів, поки дані вантажаться
+  function skTiles(n) { var a = []; for (var i = 0; i < n; i++) a.push('<div class="tw sk" aria-hidden="true"><span class="poster"></span><i></i><i></i></div>'); return a.join(''); }
+  // Готові кіносаги: широкі картки, натискання відкриває всі частини по порядку
+  function sagaShelf(toon) {
+    if (!F.tmdbKeyOf()) return '';
+    var all = F.sagaList(toon), ready = all.filter(function (x) { return x.cid; });
+    F.sagasResolve().then(function (ch) { if (ch) paintSagas(); }, function () {});
+    if (!all.length) return '';
+    var cards = ready.length ? ready.map(function (x) {
+      var m = F.marathonOf('mt' + x.cid), img = x.back ? F.tmdbImg(x.back, 'w780') : x.poster ? F.tmdbImg(x.poster, 'w342') : '';
+      return '<button class="cw saga glow" style="--h:' + hue(x.cid) + '" data-act="martmdb" data-cid="' + x.cid + '"><span class="cw-img"' + (img ? ' style="background-image:url(\'' + esc(img) + '\')"' : '') + '>' + (m && m.total ? '<span class="cw-bar"><i style="width:' + Math.round(m.done / m.total * 100) + '%"></i></span>' : '') + '</span><span class="cw-t">' + esc(x.name) + '</span><span class="cw-m">' + (m && m.total ? 'Переглянуто ' + m.done + ' з ' + m.total : 'Усі частини по порядку') + '</span></button>';
+    }).join('') : [0, 1, 2, 3, 4].map(function () { return '<div class="cw sk" aria-hidden="true"><span class="cw-img"></span><i></i><i></i></div>'; }).join('');
+    return '<section class="shelf sagas" data-sagas="' + (toon ? 1 : 0) + '"><div class="shelf-h"><h2>' + (toon ? 'Мультсаги' : 'Кіносаги') + '</h2><button class="more-link" data-act="marfind">Знайти іншу</button></div><div class="strip">' + cards + '</div></section>';
+  }
+  function paintSagas() { var box = app && app.querySelector('[data-sagas]'); if (!box || ui.tab !== 'home') return; var h = sagaShelf(box.getAttribute('data-sagas') === '1'); if (h) box.outerHTML = h; else box.remove(); }
+  function shelvesHtml(defs) {
+    var a = defs.map(shelfSection), all = mix();
+    if (all || ui.homeMt !== 'tv') a.splice(Math.min(2, a.length), 0, sagaShelf(!all && ui.homeMt === 'toon'));
+    return a.join('');
+  }
   function shelfSection(def) {
     var st = shelfState(def); if (!st) return '';
-    var items = st.items ? vis(st.items) : [], total = items.length; if (def.limit) items = items.slice(0, 15);
-    var h = '<section class="shelf" data-shelf="' + esc(def.id) + '"><div class="shelf-h"><h2>' + esc(shTitle(def)) + '</h2>' + (total ? '<button class="more-link" data-act="coll" data-id="' + esc(def.id) + '">Усі</button>' : '') + '</div>';
-    if (st.loading) return h + '<div class="spin" role="status" aria-label="Завантажуємо"></div></section>';
+    var top = !!def.top, items = st.items ? vis(st.items) : [], total = items.length; if (def.limit) items = items.slice(0, top ? 10 : 15);
+    var h = '<section class="shelf' + (top ? ' top10' : '') + '" data-shelf="' + esc(def.id) + '"><div class="shelf-h"><h2>' + esc(shTitle(def)) + '</h2>' + (total ? '<button class="more-link" data-act="coll" data-id="' + esc(def.id) + '">Усі</button>' : '') + '</div>';
+    if (st.loading) return h + '<div class="strip" role="status" aria-label="Завантажуємо">' + skTiles(8) + '</div></section>';
     if (st.error) return h + '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(st.error)) + '<p style="margin:10px 0 0"><button class="btn sm" data-act="reshelf" data-id="' + esc(def.id) + '">Спробувати ще раз</button></p></div></div></section>';
     if (!total) return '';
     return h + '<div class="strip">' + items.map(catTile).join('') + '</div></section>';
@@ -193,7 +255,7 @@
     var th = picks.length > 1 ? '<ol class="bb-q" aria-label="' + esc(def.title) + '">' + picks.map(function (x, i) { return '<li><button type="button" data-act="heropick" data-i="' + i + '" aria-pressed="' + (i === ix) + '"><b>' + (i + 1) + '</b><span>' + esc(x.title) + '</span>' + (i === ix ? '<i class="bb-pr"></i>' : '') + '</button></li>'; }).join('') + '</ol>' : '';
     setAmb(F.tmdbImg(r.poster, 'w92'), r.tid, true);
     var hk = def.id + ':' + r.tid, still = ui.heroLast === hk; ui.heroLast = hk;
-    return '<section class="bb' + (still ? ' still' : '') + '" data-hero aria-label="' + esc(def.title) + '"><div class="bb-img" style="background-image:url(\'' + esc(F.tmdbImg(r.back, 'w1280')) + '\')"></div><div class="bb-in"><p class="bb-l">' + esc(def.title) + '</p><h2 class="bb-t">' + esc(r.title) + '</h2><p class="bb-m">' + pill + '<span>' + esc(meta) + '</span></p>' + (r.plot ? '<p class="bb-p">' + esc(r.plot) + '</p>' : '') +
+    return '<section class="bb' + (still ? ' still' : '') + '" data-hero aria-label="' + esc(def.title) + '"><div class="bb-img" style="background-image:url(\'' + esc(isDesktop() ? F.tmdbImg(r.back, 'w1280') : F.tmdbImg(r.poster || r.back, 'w780')) + '\')"></div><div class="bb-in"><p class="bb-l">' + esc(def.title) + '</p><h2 class="bb-t">' + esc(r.title) + '</h2><p class="bb-m">' + pill + '<span>' + esc(meta) + '</span></p>' + (r.plot ? '<p class="bb-p">' + esc(r.plot) + '</p>' : '') +
       '<div class="bb-a"><button class="btn" data-act="cat"' + d + '>Детальніше</button>' + add + '</div></div>' + th + '</section>';
   }
   function heroMine() {
@@ -208,7 +270,7 @@
       '<div class="bb-a"><button class="btn" data-act="open" data-id="' + it.id + '">Відкрити</button><button class="btn ghost" data-act="finish" data-id="' + it.id + '">' + ic('check', 'sm') + 'Завершив</button></div></div>' + (back ? '' : '<div class="bb-poster">' + posterHtml(it.poster, it.title) + '</div>') + '</section>';
   }
   function heroHtml() {
-    var h = !isDesktop() || (ui.homeGenre && ui.homeMt !== 'toon' && !mix()) ? '' : F.tmdbKeyOf() ? heroCat() : heroMine();
+    var h = ui.homeGenre && ui.homeMt !== 'toon' && !mix() ? '' : !isDesktop() ? (ui.homeView === 'cat' && F.tmdbKeyOf() ? heroCat() : '') : F.tmdbKeyOf() ? heroCat() : heroMine();
     ui.heroDom = h.replace('class="bb still"', 'class="bb"');
     return h;
   }
@@ -240,7 +302,7 @@
     h += adviceHtml() + bar;
     ensureShelves();
     if (!all && (toon || mt === 'tv')) h += '<section class="shelf studios"><div class="shelf-h"><h2>' + (toon ? 'Студії' : 'Студії й канали') + '</h2></div><div class="chips" role="group">' + F.studios(mt).map(function (s) { return '<button type="button" class="chip" data-act="studio" data-id="' + s.id + '">' + esc(s.name) + '</button>'; }).join('') + '</div></section>';
-    h += homeDefs().map(shelfSection).join('');
+    h += shelvesHtml(homeDefs());
     if (!all && ui.cat.shown[mt] < F.collDefs(mt).length) h += '<p class="morewrap"><button class="btn ghost" data-act="moreshelves">Більше добірок</button></p>';
     return h;
   }
@@ -268,9 +330,10 @@
     var mine = ui.homeView === 'mine';
     h += '<div class="hv" role="tablist" aria-label="Головна">' + [['mine', 'Моє'], ['cat', 'Каталог']].map(function (v) { return '<button type="button" role="tab" data-act="homeview" data-v="' + v[0] + '" aria-selected="' + (ui.homeView === v[0]) + '">' + v[1] + '</button>'; }).join('') + '</div>';
     if (mine) {
-      var body0 = newsHtml() + shelfHtml('Дивлюсь зараз', F.list('watching').slice(0, 12), 'watching') + marSection() + soonHtml() + F.colList().map(function (c) { return plainShelf(c.name, F.colItems(c.id)); }).join('');
+      var body0 = newsHtml() + shelfHtml('Дивлюсь зараз', F.list('watching').slice(0, 12), 'watching') + marSection() + soonHtml() + calEntry() + F.colList().map(function (c) { return plainShelf(c.name, F.colItems(c.id)); }).join('');
       return h + (body0 || emptyHtml('play', 'Тут буде те, що ви дивитесь', 'Нові серії, найближчі прем’єри й заплановані перегляди з’являться тут. Почніть з каталогу.', '<p><button class="btn" data-act="homeview" data-v="cat">Відкрити каталог</button></p>'));
     }
+    h += heroHtml();
     h += adviceHtml();
     if (F.tmdbKeyOf()) h += '<button class="marentry" data-act="marfind">' + ic('film', 'sm') + '<span><b>Кіномарафони</b><span>Франшизи по порядку: «Володар перснів», Marvel, «Гаррі Поттер»…</span></span>' + ic('right', 'sm') + '</button>';
     var mt = ui.homeMt, toon = mt === 'toon';
@@ -285,7 +348,7 @@
     }
     ensureShelves();
     if (toon || mt === 'tv') h += '<section class="shelf studios"><div class="shelf-h"><h2>' + (toon ? 'Студії' : 'Студії й канали') + '</h2></div><div class="chips" role="group" aria-label="' + (toon ? 'Студії' : 'Студії й канали') + '">' + F.studios(mt).map(function (s) { return '<button type="button" class="chip" data-act="studio" data-id="' + s.id + '">' + esc(s.name) + '</button>'; }).join('') + '</div></section>';
-    var defs = F.collDefs(mt), n = ui.cat.shown[mt], body = defs.slice(0, n).map(shelfSection).join('');
+    var defs = F.collDefs(mt), n = ui.cat.shown[mt], body = shelvesHtml(defs.slice(0, n));
     h += body;
     var states = defs.slice(0, n).map(shelfState).filter(Boolean);
     if (states.length && states.every(function (x) { return !x.loading && !x.error && !vis(x.items).length; })) h += emptyHtml('film', 'Каталог порожній', 'TMDB не повернув жодного фільму. Спробуйте пізніше.');
@@ -709,6 +772,7 @@
   }
   function pushCurrent() {
     var cur = ui.sheet; if (!cur || cur.wheel || cur.duo) return;
+    if (cur.cal) { var cl = $('.sheet', sheetRoot); ui.stack.push({ cal: true, scroll: cl ? cl.scrollTop : 0 }); return; }
     if (cur.coll) { var cs = $('.sheet', sheetRoot); cur.coll.scroll = cs ? cs.scrollTop : 0; ui.stack.push({ coll: cur.coll }); }
     else if (cur.person) ui.stack.push({ person: cur.person });
     else ui.stack.push({ id: cur.id, brief: cur.brief || (cur.item ? F.brief(cur.item) : null) });
@@ -855,6 +919,7 @@
     }).join('') + '</div>';
   }
   function sheetHtml() {
+    if (ui.sheet.cal) return calHtml();
     var sh = ui.sheet;
     if (sh.person) return personHtml(sh);
     if (sh.wheel) return wheelHtml(sh);
@@ -941,7 +1006,8 @@
   // Крок назад: до попередньої картки, списку чи людини. Повертає false, якщо назад нема куди.
   function goBack() {
     var prev = ui.stack.pop(); if (!prev) return false;
-    if (prev.coll) showColl(prev.coll); else if (prev.person) openPerson(prev.person); else openSheet(prev.id, prev.brief);
+    if (prev.cal) { ui.sheet = { cal: true }; renderSheet(); var cn = $('.sheet', sheetRoot); if (cn) cn.scrollTop = prev.scroll || 0; }
+    else if (prev.coll) showColl(prev.coll); else if (prev.person) openPerson(prev.person); else openSheet(prev.id, prev.brief);
     return true;
   }
   // Закриття (хрестик, Esc, натискання поза карткою): на крок назад, а повністю закриває лише перша картка.
@@ -1074,7 +1140,7 @@
     return [m[0], t[0], m[1], t[1], c[0], m[2], t[2], c[1], m[3], t[3]].filter(Boolean);
   }
   function shTitle(def) {
-    if (!mix()) return def.title;
+    if (!mix() || def.top || def.kw) return def.title;
     var has = function (k) { return F.collDefs(k).some(function (d) { return d.id === def.id; }); };
     return def.title + (has('toon') ? ', мультики' : has('tv') ? ', серіали' : ', фільми');
   }
@@ -1086,6 +1152,7 @@
       '<button class="nl ico" data-act="spot" aria-label="Пошук" title="Пошук ( / )">' + ic('search') + '</button>' +
       cat('', 'Головна') + cat('movie', 'Фільми') + cat('tv', 'Серіали') + cat('toon', 'Мультики') +
       '<button class="nl" data-act="tab" data-tab="' + (ui.libTab || 'watching') + '"' + cur(lib) + '>Моя колекція</button>' +
+      '<button class="nl" data-act="cal">Календар</button>' +
       '<button class="nl" data-act="tab" data-tab="search"' + cur(st === 'search') + '>Підбір</button>' +
       '<button class="nl ico last" data-act="tab" data-tab="more" aria-label="Налаштування і статистика" title="Налаштування і статистика"' + cur(st === 'more') + '>' + ic('more') + '</button>';
   }
@@ -1116,7 +1183,6 @@
   function ambApply(c) { if (c) document.documentElement.style.setProperty('--amb', c); else document.documentElement.style.removeProperty('--amb'); }
   // base=true: колір сторінки (банер); інакше тимчасовий (наведення, відкрита картка)
   function setAmb(url, id, base) {
-    if (!isDesktop()) return;
     var fb = 'hsl(' + hue(id) + ' 70% 68%)', tok = ++ambTok;
     url = String(url || '').replace(/(image\.tmdb\.org\/t\/p\/)\w+\//, '$1w92/');
     ambCompute(url).then(function (c) { c = c || fb; if (base) ambBase = c; if (tok === ambTok && (base ? !ui.sheet : true)) ambApply(c); });
@@ -1320,12 +1386,14 @@
       }
       case 'heropick': ui.heroIx = Number(el.dataset.i) || 0; paintHero(); break;
       case 'spot': openSpot(); break;
+      case 'cal': if (ui.sheet && !ui.sheet.wheel) pushCurrent(); else ui.stack = []; ui.sheet = { cal: true }; renderSheet(); calLoadMore(); break;
       case 'desk': ui.deskAll = !el.dataset.mt; if (el.dataset.mt) ui.homeMt = el.dataset.mt === 'tv' ? 'tv' : el.dataset.mt === 'toon' ? 'toon' : 'movie'; ui.homeGenre = ''; ui.heroIx = 0; ui.heroKey = ''; setTab('home'); break;
       case 'spotgo': spotGo(el.dataset.q || ''); break;
       case 'type': ui.type = el.dataset.type; if (ui.q.trim() && ui.searched) doSearch(false); else render(); break;
       case 'more': doSearch(true); break;
       case 'open': {
         var br = null; for (var i = 0; i < ui.results.length; i++) if (ui.results[i].id === id) br = ui.results[i];
+        if (ui.sheet && ui.sheet.cal) pushCurrent();
         openSheet(id, br); break;
       }
       case 'quick': {
