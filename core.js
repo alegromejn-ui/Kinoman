@@ -391,7 +391,7 @@
     var mon = new Date(FB.now()).getMonth(), season = mon >= 10 || mon === 0, ny = null;
     if (cat === 'toon') ny = { id: 'c-ny', title: 'Новорічні мультфільми', mt: 'movie', path: '/discover/movie', p: { with_genres: '16', 'vote_count.gte': 80 }, toon: true, limit: 0 };
     else if (cat !== 'tv') ny = { id: 'm-ny', title: 'Новорічні й різдвяні фільми', mt: 'movie', path: '/discover/movie', p: { 'vote_count.gte': 300 }, toon: false, limit: 0 };
-    if (ny) { ny.kw = ['christmas', "new year's eve"]; ny.drop = ['ru']; L.splice(season ? 1 : Math.min(L.length, 9), 0, ny); }
+    if (ny) { ny.kw = ['christmas', "new year's eve"]; ny.drop = ['ru']; ny.sorts = true; L.splice(season ? 1 : Math.min(L.length, 9), 0, ny); }
     return L;
   }
   // Топові студії анімації (ідентифікатори компаній TMDB); вибір студії не зачіпає фільтр «Без аніме й Азії»
@@ -461,19 +461,20 @@
     if (dirty) { try { localStorage.setItem('kinoman_kw', JSON.stringify(kwMem)); } catch (e) { /* лише на цей сеанс */ } }
     return out;
   }
-  async function collection(id, page, yr) {
+  async function collection(id, page, yr, sort) {
     var def = collDef(id); if (!def) return { items: [], more: false };
     if (def.oscar) { page = Math.max(1, Math.min(10, Math.floor(Number(page)) || 1)); var ok0 = 'c:' + id + ':' + page, oc = catCache[ok0]; if (oc && FB.now() - oc.t < 3600000) return oc.res; var ores = await oscarPage(page); catCache[ok0] = { t: FB.now(), res: ores }; return ores; }
     page = Math.max(1, Math.min(10, Math.floor(Number(page)) || 1)); if (def.limit) page = 1;
-    var span = def.limit ? yearSpan(yr) : null;
+    var span = def.limit ? yearSpan(yr) : null, byVote = !!def.sorts && sort === 'rating';
     var drop = def.toon && !def.studio && west ? ASIA : null; if (def.drop) drop = (drop || []).concat(def.drop);
-    var ck = 'c:' + id + ':' + page + (span ? ':' + span.key : '') + (drop ? ':w' : ''), c = catCache[ck]; if (c && FB.now() - c.t < 3600000) return c.res;
+    var ck = 'c:' + id + ':' + page + (span ? ':' + span.key : '') + (drop ? ':w' : '') + (byVote ? ':r' : ''), c = catCache[ck]; if (c && FB.now() - c.t < 3600000) return c.res;
     var p = ext({ language: 'uk-UA', page: page, include_adult: 'false' }, def.p), disc = /^\/discover\//.test(def.path), skip = def.toon ? null : EXCL[def.mt];
     if (span) {
       p = ext(p, dates(def.mt, span.from, span.to));
       // за один рік голосів менше, ніж за всі роки, тому поріг м’якший
       var vc = Number(p['vote_count.gte']); if (vc > 0) p['vote_count.gte'] = Math.max(30, Math.round(vc / (span.dec ? 3 : 8)));
     }
+    if (byVote) p.sort_by = 'vote_average.desc'; // підбірки з перемикачем: за рейтингом замість популярності
     if (disc) { if (!p.sort_by) p.sort_by = 'popularity.desc'; if (skip) p.without_genres = skip.join('|'); }
     if (def.kw) { var kws = await kwIds(def.kw); if (!kws.length) return { items: [], more: false }; p.with_keywords = kws.join('|'); }
     var res;

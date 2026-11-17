@@ -457,11 +457,26 @@
     if (c.find) return marFindHtml(c);
     var h = '<div class="sheetbar">' + (ui.stack.length ? '<button class="back" data-act="back" aria-label="Назад">' + ic('left') + '</button>' : '') + '<button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button></div><div class="coll"><h3>' + esc(c.title) + '</h3><p class="sub">' + c.items.length + ' ' + plural(c.items.length, 'фільм і серіал', 'фільми й серіали', 'фільмів і серіалів') + '</p>';
     if (c.limit) h += yearBar(c);
+    if (c.sorts) h += sortBar(c);
     h += '<div class="tgrid"' + (c.busy ? ' role="status" aria-label="Завантажуємо"' : '') + '>' + vis(c.items).map(catTile).join('') + (c.busy ? skTiles(c.items.length ? 6 : 12) : '') + '</div>';
     if (c.error) h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(c.error)) + '</div></div>';
     if (c.limit && c.year && !c.busy && !c.items.length && !c.error) h += '<p class="fine">За цей період замало оцінених. Спробуйте десятиліття або інший рік.</p>';
     if (!c.busy && c.more) h += '<p class="morewrap"><button class="btn ghost sm" data-act="collmore">Показати ще</button></p>';
     return h + '</div>';
+  }
+  // Підбірки з перемикачем сортування (новорічні): за популярністю або за рейтингом
+  function sortBar(c) {
+    return '<div class="tools yrbar"><select data-change="collsort" aria-label="Сортування"' + (c.busy ? ' disabled' : '') + '>' + [['', 'За популярністю'], ['rating', 'За рейтингом']].map(function (o) { return '<option value="' + o[0] + '"' + (c.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>';
+  }
+  async function collSort(val) {
+    var sh = ui.sheet, c = sh && sh.coll; if (!c || !c.sorts || c.busy) return;
+    if (val !== 'rating') val = '';
+    c.sort = val; c.error = null; c.page = 1;
+    if (!val) { c.items = c.base.slice(); c.more = c.baseMore; renderSheet(); return; }
+    c.items = []; c.more = false; c.busy = true; renderSheet();
+    try { var r = await F.collection(c.id, 1, '', val); if (c.sort === val) { c.items = r.items; c.more = r.more; } }
+    catch (e) { if (c.sort === val) { c.error = e; c.items = []; } }
+    c.busy = false; if (ui.sheet === sh) renderSheet();
   }
   // «Топ N»: вибір року або десятиліття
   function yearBar(c) {
@@ -490,11 +505,11 @@
   }
   function openColl(id) {
     var def = F.collDefs('movie').concat(F.collDefs('tv'), F.collDefs('toon')).filter(function (d) { return d.id === id; })[0], st = ui.cat.sh[id]; if (!def || !st || !st.items) return;
-    ui.sheet = { coll: { id: id, title: def.title, items: st.items.slice(), base: st.items.slice(), limit: def.limit, year: '', page: 1, more: st.more, busy: false, error: null } }; ui.stack = []; renderSheet();
+    ui.sheet = { coll: { id: id, title: def.title, items: st.items.slice(), base: st.items.slice(), baseMore: st.more, limit: def.limit, year: '', sorts: !!def.sorts, sort: '', page: 1, more: st.more, busy: false, error: null } }; ui.stack = []; renderSheet();
   }
   async function collMore() {
     var sh = ui.sheet, c = sh && sh.coll; if (!c || c.busy || !c.more) return; c.busy = true; c.error = null; renderSheet();
-    try { var r = await F.collection(c.id, c.page + 1); c.page++; var seen = {}; c.items.forEach(function (x) { seen[x.mt + x.tid] = 1; }); r.items.forEach(function (x) { if (!seen[x.mt + x.tid]) c.items.push(x); }); c.more = r.more; }
+    try { var r = await F.collection(c.id, c.page + 1, '', c.sort); c.page++; var seen = {}; c.items.forEach(function (x) { seen[x.mt + x.tid] = 1; }); r.items.forEach(function (x) { if (!seen[x.mt + x.tid]) c.items.push(x); }); c.more = r.more; }
     catch (e) { c.error = e; }
     c.busy = false; if (ui.sheet === sh) renderSheet();
   }
@@ -1863,6 +1878,7 @@
       var el = e.target;
       if (el.dataset && el.dataset.change === 'sort') { ui.lists[ui.tab].sort = el.value; render(); }
       if (el.dataset && el.dataset.change === 'collyear') { collYear(el.value); }
+      if (el.dataset && el.dataset.change === 'collsort') { collSort(el.value); }
       if (el.dataset && el.dataset.change === 'plan' && ui.sheet && ui.sheet.id) { F.setPlan(ui.sheet.id, el.value); }
       if (el.dataset && el.dataset.change === 'time') { ui.lists[ui.tab].time = el.value; render(); }
       if (el.dataset && el.dataset.change === 'fl' && /^(genre|decade|vote)$/.test(el.dataset.k)) { ui.fl[el.dataset.k] = el.value; render(); }
