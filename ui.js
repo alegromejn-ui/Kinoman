@@ -460,22 +460,24 @@
     if (c.sorts) h += sortBar(c);
     h += '<div class="tgrid"' + (c.busy ? ' role="status" aria-label="Завантажуємо"' : '') + '>' + vis(c.items).map(catTile).join('') + (c.busy ? skTiles(c.items.length ? 6 : 12) : '') + '</div>';
     if (c.error) h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(c.error)) + '</div></div>';
+    if (c.sorts && (c.genre || c.age) && !c.busy && !c.items.length && !c.error) h += '<p class="fine">Нічого не знайшлося. Спробуйте інший жанр або вік.</p>';
     if (c.limit && c.year && !c.busy && !c.items.length && !c.error) h += '<p class="fine">За цей період замало оцінених. Спробуйте десятиліття або інший рік.</p>';
     if (!c.busy && c.more) h += '<p class="morewrap"><button class="btn ghost sm" data-act="collmore">Показати ще</button></p>';
     return h + '</div>';
   }
-  // Підбірки з перемикачем сортування (новорічні): за популярністю або за рейтингом
+  // Підбірки з фільтрами (новорічні): сортування, жанр і вік
   function sortBar(c) {
-    return '<div class="tools yrbar"><select data-change="collsort" aria-label="Сортування"' + (c.busy ? ' disabled' : '') + '>' + [['', 'За популярністю'], ['rating', 'За рейтингом']].map(function (o) { return '<option value="' + o[0] + '"' + (c.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>';
+    var sel = function (k, label, opts) { return '<select data-change="collsort" data-k="' + k + '" aria-label="' + label + '"' + (c.busy ? ' disabled' : '') + '>' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (c[k] === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>'; };
+    return '<div class="tools yrbar collf">' + sel('sort', 'Сортування', [['', 'За популярністю'], ['rating', 'За рейтингом']]) + sel('genre', 'Жанр', [['', 'Усі жанри']].concat(F.COLL_GENRES)) + sel('age', 'Вік', [['', 'Будь-який вік']].concat(F.COLL_AGES)) + '</div>';
   }
-  async function collSort(val) {
-    var sh = ui.sheet, c = sh && sh.coll; if (!c || !c.sorts || c.busy) return;
-    if (val !== 'rating') val = '';
-    c.sort = val; c.error = null; c.page = 1;
-    if (!val) { c.items = c.base.slice(); c.more = c.baseMore; renderSheet(); return; }
+  async function collSort(k, val) {
+    var sh = ui.sheet, c = sh && sh.coll; if (!c || !c.sorts || c.busy || !/^(sort|genre|age)$/.test(k)) return;
+    c[k] = String(val || ''); c.error = null; c.page = 1;
+    if (!c.sort && !c.genre && !c.age) { c.items = c.base.slice(); c.more = c.baseMore; renderSheet(); return; }
+    var key = c.sort + '|' + c.genre + '|' + c.age, now = function () { return c.sort + '|' + c.genre + '|' + c.age === key; };
     c.items = []; c.more = false; c.busy = true; renderSheet();
-    try { var r = await F.collection(c.id, 1, '', val); if (c.sort === val) { c.items = r.items; c.more = r.more; } }
-    catch (e) { if (c.sort === val) { c.error = e; c.items = []; } }
+    try { var r = await F.collection(c.id, 1, '', { sort: c.sort, genre: c.genre, age: c.age }); if (now()) { c.items = r.items; c.more = r.more; } }
+    catch (e) { if (now()) { c.error = e; c.items = []; } }
     c.busy = false; if (ui.sheet === sh) renderSheet();
   }
   // «Топ N»: вибір року або десятиліття
@@ -505,11 +507,11 @@
   }
   function openColl(id) {
     var def = F.collDefs('movie').concat(F.collDefs('tv'), F.collDefs('toon')).filter(function (d) { return d.id === id; })[0], st = ui.cat.sh[id]; if (!def || !st || !st.items) return;
-    ui.sheet = { coll: { id: id, title: def.title, items: st.items.slice(), base: st.items.slice(), baseMore: st.more, limit: def.limit, year: '', sorts: !!def.sorts, sort: '', page: 1, more: st.more, busy: false, error: null } }; ui.stack = []; renderSheet();
+    ui.sheet = { coll: { id: id, title: def.title, items: st.items.slice(), base: st.items.slice(), baseMore: st.more, limit: def.limit, year: '', sorts: !!def.sorts, sort: '', genre: '', age: '', page: 1, more: st.more, busy: false, error: null } }; ui.stack = []; renderSheet();
   }
   async function collMore() {
     var sh = ui.sheet, c = sh && sh.coll; if (!c || c.busy || !c.more) return; c.busy = true; c.error = null; renderSheet();
-    try { var r = await F.collection(c.id, c.page + 1, '', c.sort); c.page++; var seen = {}; c.items.forEach(function (x) { seen[x.mt + x.tid] = 1; }); r.items.forEach(function (x) { if (!seen[x.mt + x.tid]) c.items.push(x); }); c.more = r.more; }
+    try { var r = await F.collection(c.id, c.page + 1, '', { sort: c.sort, genre: c.genre, age: c.age }); c.page++; var seen = {}; c.items.forEach(function (x) { seen[x.mt + x.tid] = 1; }); r.items.forEach(function (x) { if (!seen[x.mt + x.tid]) c.items.push(x); }); c.more = r.more; }
     catch (e) { c.error = e; }
     c.busy = false; if (ui.sheet === sh) renderSheet();
   }
@@ -1878,7 +1880,7 @@
       var el = e.target;
       if (el.dataset && el.dataset.change === 'sort') { ui.lists[ui.tab].sort = el.value; render(); }
       if (el.dataset && el.dataset.change === 'collyear') { collYear(el.value); }
-      if (el.dataset && el.dataset.change === 'collsort') { collSort(el.value); }
+      if (el.dataset && el.dataset.change === 'collsort') { collSort(el.dataset.k, el.value); }
       if (el.dataset && el.dataset.change === 'plan' && ui.sheet && ui.sheet.id) { F.setPlan(ui.sheet.id, el.value); }
       if (el.dataset && el.dataset.change === 'time') { ui.lists[ui.tab].time = el.value; render(); }
       if (el.dataset && el.dataset.change === 'fl' && /^(genre|decade|vote)$/.test(el.dataset.k)) { ui.fl[el.dataset.k] = el.value; render(); }

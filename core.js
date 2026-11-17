@@ -461,13 +461,18 @@
     if (dirty) { try { localStorage.setItem('kinoman_kw', JSON.stringify(kwMem)); } catch (e) { /* лише на цей сеанс */ } }
     return out;
   }
-  async function collection(id, page, yr, sort) {
+  // Фільтри для підбірок з def.sorts: жанр (id TMDB) і віковий рейтинг США (certification.lte)
+  var COLL_GENRES = [['35', 'Комедія'], ['10751', 'Сімейний'], ['10749', 'Мелодрама'], ['18', 'Драма'], ['14', 'Фентезі'], ['12', 'Пригоди'], ['28', 'Бойовик'], ['27', 'Жахи']];
+  var COLL_AGES = [['G', '0+ для всіх'], ['PG', 'до 6+'], ['PG-13', 'до 12+'], ['R', 'до 16+']];
+  function pick(list, v) { return list.some(function (o) { return o[0] === v; }) ? v : ''; }
+  async function collection(id, page, yr, opt) {
+    if (typeof opt === 'string') opt = { sort: opt }; opt = opt || {};
     var def = collDef(id); if (!def) return { items: [], more: false };
     if (def.oscar) { page = Math.max(1, Math.min(10, Math.floor(Number(page)) || 1)); var ok0 = 'c:' + id + ':' + page, oc = catCache[ok0]; if (oc && FB.now() - oc.t < 3600000) return oc.res; var ores = await oscarPage(page); catCache[ok0] = { t: FB.now(), res: ores }; return ores; }
     page = Math.max(1, Math.min(10, Math.floor(Number(page)) || 1)); if (def.limit) page = 1;
-    var span = def.limit ? yearSpan(yr) : null, byVote = !!def.sorts && sort === 'rating';
+    var span = def.limit ? yearSpan(yr) : null, byVote = !!def.sorts && opt.sort === 'rating', gen = def.sorts ? pick(COLL_GENRES, opt.genre) : '', age = def.sorts ? pick(COLL_AGES, opt.age) : '';
     var drop = def.toon && !def.studio && west ? ASIA : null; if (def.drop) drop = (drop || []).concat(def.drop);
-    var ck = 'c:' + id + ':' + page + (span ? ':' + span.key : '') + (drop ? ':w' : '') + (byVote ? ':r' : ''), c = catCache[ck]; if (c && FB.now() - c.t < 3600000) return c.res;
+    var ck = 'c:' + id + ':' + page + (span ? ':' + span.key : '') + (drop ? ':w' : '') + (byVote ? ':r' : '') + (gen ? ':g' + gen : '') + (age ? ':a' + age : ''), c = catCache[ck]; if (c && FB.now() - c.t < 3600000) return c.res;
     var p = ext({ language: 'uk-UA', page: page, include_adult: 'false' }, def.p), disc = /^\/discover\//.test(def.path), skip = def.toon ? null : EXCL[def.mt];
     if (span) {
       p = ext(p, dates(def.mt, span.from, span.to));
@@ -475,6 +480,8 @@
       var vc = Number(p['vote_count.gte']); if (vc > 0) p['vote_count.gte'] = Math.max(30, Math.round(vc / (span.dec ? 3 : 8)));
     }
     if (byVote) p.sort_by = 'vote_average.desc'; // підбірки з перемикачем: за рейтингом замість популярності
+    if (gen) p.with_genres = p.with_genres ? p.with_genres + ',' + gen : gen;
+    if (age) { p.certification_country = 'US'; p['certification.lte'] = age; }
     if (disc) { if (!p.sort_by) p.sort_by = 'popularity.desc'; if (skip) p.without_genres = skip.join('|'); }
     if (def.kw) { var kws = await kwIds(def.kw); if (!kws.length) return { items: [], more: false }; p.with_keywords = kws.join('|'); }
     var res;
@@ -1370,7 +1377,7 @@
     collName: collName, tmdbCollection: tmdbCollection, searchMarathons: searchMarathons, aiMarathon: aiMarathon, saveMarathon: saveMarathon, removeMarathon: removeMarathon, marathons: marathons, marathonOf: marathonOf,
     setArch: setArch, archived: archived, oldCount: oldCount, SORTS_FOR: SORTS_FOR,
     backupNow: backupNow, backupDue: backupDue, autoBackup: autoBackup, listBackups: listBackups, restoreBackup: restoreBackup,
-    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, kyivstar: kyivstar, kyivstarText: kyivstarText, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, isToon: isToon, tmdbItem: tmdbItem, toonWest: toonWest, setToonWest: setToonWest, studios: studios, studioDef: studioDef, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
+    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, kyivstar: kyivstar, kyivstarText: kyivstarText, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, isToon: isToon, tmdbItem: tmdbItem, toonWest: toonWest, setToonWest: setToonWest, studios: studios, studioDef: studioDef, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, COLL_GENRES: COLL_GENRES, COLL_AGES: COLL_AGES, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
     getItem: getItem, setStatus: setStatus, setMyRating: setMyRating, setNote: setNote, removeItem: removeItem, restoreItem: restoreItem, refresh: refresh,
     toggleEpisode: toggleEpisode, setSeasonWatched: setSeasonWatched, seasonProgress: seasonProgress, watchedCount: watchedCount,
     list: list, genres: genres, randomPick: randomPick, stats: stats, fmtMinutes: fmtMinutes, SORTS: SORTS, brief: brief,

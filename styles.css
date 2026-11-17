@@ -505,6 +505,8 @@ button.qin:active{transform:scale(.9)}
 /* v21: фільтр року в «Топ 100» */
 .yrbar{margin:4px 0 12px}
 .yrbar select{max-width:100%}
+.collf{flex-wrap:wrap}
+.collf select{flex:1 1 140px;min-width:0}
 /* v21: фільтр року в «Топ 100» */
 .yrbar{margin:4px 0 12px}
 .yrbar select{max-width:100%}
