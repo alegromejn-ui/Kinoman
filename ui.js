@@ -1563,7 +1563,7 @@
       case 'qh': { ui.q = el.dataset.q || ''; var qi = $('#q'); if (qi) qi.value = ui.q; doSearch(false); break; }
       case 'qhclear': F.clearQueries(); render(); break;
       case 'recap': loadRecap(Number(el.dataset.s) || 1, Number(el.dataset.e) || 0); break;
-      case 'hidegrp': { F.setHideGrp(!F.hideGrpOn()); toast(F.hideGrpOn() ? 'Сховано «Для двох» і «Сімейні»' : 'Знову показуємо все'); render(); break; }
+      case 'hidegrp': { F.setHideGrp(!F.hideGrpOn()); toast(F.hideGrpOn() ? 'Сховано «Для двох», «Сімейні» й добірки' : 'Знову показуємо все'); render(); break; }
       case 'famf': { var ff = ui.lists[ui.tab]; if (ff) { ff.fam = !ff.fam; render(); } break; }
       case 'togfam': { var lf2 = ui.sheet && F.getItem(ui.sheet.id); if (lf2) { var on3 = F.toggleFam(lf2.id); toast(on3 ? 'Позначено «Сімейні»' : 'Прибрано з «Сімейні»'); renderSheet(); render(); } break; }
       case 'oldf': { var lf = ui.lists[ui.tab]; if (lf) { lf.old = !lf.old; render(); } break; }
