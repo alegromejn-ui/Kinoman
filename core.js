@@ -1210,7 +1210,7 @@
   }
   // Готові кіносаги: колекцію TMDB знаходимо за точною назвою, результат зберігаємо в цьому браузері
   // companies: сага без колекції TMDB, збирається з фільмів студій (vc: мінімум голосів, щоб відсіяти дрібне)
-  var SAGAS = [['Marvel', 'Marvel', 0, { companies: '420', vc: 300 }], ['DC', 'DC', 0, { companies: '429|9993|128064|184898', vc: 800 }], ['Гаррі Поттер', 'Harry Potter'], ['Володар перснів', 'The Lord of the Rings', 0, { films: [['The Lord of the Rings: The War of the Rohirrim', '2024']] }], ['Хоббіт', 'The Hobbit'], ['Зоряні війни', 'Star Wars', 0, { films: [['Star Wars: The Clone Wars', '2008'], ['Rogue One: A Star Wars Story', '2016'], ['Solo: A Star Wars Story', '2018'], ['The Mandalorian and Grogu', '2026']] }], ['Месники', 'The Avengers'], ['Пірати Карибського моря', 'Pirates of the Caribbean'],
+  var SAGAS = [['Marvel', 'Marvel', 0, { companies: '420', vc: 300, from: '2008-01-01', cols: ['The Avengers'] }], ['DC', 'DC', 0, { companies: '429|9993|128064|184898', vc: 800 }], ['Гаррі Поттер', 'Harry Potter'], ['Володар перснів', 'The Lord of the Rings', 0, { films: [['The Lord of the Rings: The War of the Rohirrim', '2024']] }], ['Хоббіт', 'The Hobbit'], ['Зоряні війни', 'Star Wars', 0, { films: [['Star Wars: The Clone Wars', '2008'], ['Rogue One: A Star Wars Story', '2016'], ['Solo: A Star Wars Story', '2018'], ['The Mandalorian and Grogu', '2026']] }], ['Месники', 'The Avengers'], ['Пірати Карибського моря', 'Pirates of the Caribbean'],
     ['Сам удома', 'Home Alone'], ['Матриця', 'The Matrix'], ['Голодні ігри', 'The Hunger Games'], ['Індіана Джонс', 'Indiana Jones'], ['Назад у майбутнє', 'Back to the Future'],
     ['Джон Вік', 'John Wick', 0, { films: [['From the World of John Wick: Ballerina', '2025']] }], ['Місія нездійсненна', 'Mission: Impossible'], ['Джеймс Бонд', 'James Bond'], ['Дюна', 'Dune'], ['Аватар', 'Avatar'], ['Темний лицар', 'The Dark Knight'], ['Фантастичні звірі', 'Fantastic Beasts'],
     ['Форсаж', 'The Fast and the Furious', 0, { films: [['Fast & Furious Presents: Hobbs & Shaw', '2019']] }], ['Людина-павук', 'Spider-Man', 0, { cols: ['The Amazing Spider-Man', 'Spider-Man (MCU)', 'Spider-Man: Spider-Verse'] }], ['Сутінки', 'The Twilight Saga'], ['Хрещений батько', 'The Godfather'], ['Той, хто біжить по лезу', 'Blade Runner'],
@@ -1233,7 +1233,7 @@
     var s = SAGAS.filter(function (x) { return x[1] === q; })[0], m = sagaLoad()[q]; if (!s || !m || !(m.cid > 0)) throw err('TMDB_HTTP');
     var ex = s[3] || {}, cids = ex.companies ? [] : [m.cid], raw = [], i;
     if (ex.companies) {
-      var cp = { with_companies: ex.companies, 'vote_count.gte': ex.vc || 300, sort_by: 'primary_release_date.asc', language: 'uk-UA', include_adult: 'false' };
+      var cp = { with_companies: ex.companies, 'vote_count.gte': ex.vc || 300, sort_by: 'primary_release_date.asc', language: 'uk-UA', include_adult: 'false' }; if (ex.from) cp['primary_release_date.gte'] = ex.from;
       var d0 = await tmdb('/discover/movie', ext(cp, { page: 1 })), pages = Math.min(4, Number(d0.total_pages) || 1), more = [];
       for (i = 2; i <= pages; i++) more.push(tmdb('/discover/movie', ext(cp, { page: i })));
       [d0].concat(await Promise.all(more)).forEach(function (d) { (Array.isArray(d.results) ? d.results : []).forEach(function (r) { raw.push(r); }); });
@@ -1241,7 +1241,7 @@
     for (i = 0; i < (ex.cols || []).length; i++) { try { var h = await collHit(ex.cols[i]); if (h && cids.indexOf(Math.floor(h.id)) < 0) cids.push(Math.floor(h.id)); } catch (e) { /* без цієї гілки */ } }
     for (i = 0; i < cids.length; i++) {
       try { var d = await tmdb('/collection/' + cids[i], { language: 'uk-UA' }); (Array.isArray(d.parts) ? d.parts : []).forEach(function (r) { raw.push(r); }); }
-      catch (e) { if (i === 0) throw e; }
+      catch (e) { if (i === 0 && !ex.companies) throw e; }
     }
     for (i = 0; i < (ex.films || []).length; i++) {
       try {
