@@ -798,11 +798,24 @@
     var w = lib ? F.seasonProgress(lib, n).watched : 0;
     h += '<p class="sub" style="margin:4px 0 0">Переглянуто ' + w + ' з ' + eps.length + '</p><div class="prog"><i style="width:' + Math.round(100 * w / eps.length) + '%"></i></div>';
     h += '<p style="margin:8px 0"><button class="btn ghost sm" data-act="season-all" data-on="' + (w === eps.length ? 0 : 1) + '">' + (w === eps.length ? 'Зняти всі позначки' : 'Позначити весь сезон') + '</button></p>';
+    h += epChart(eps, n, lib);
     eps.forEach(function (e) {
       var on = lib && lib.watched[F.epKey(n, e.n)];
-      h += '<button class="ep' + (on ? ' on' : '') + '" data-act="ep" data-e="' + e.n + '" aria-pressed="' + (!!on) + '"><span class="box">' + ic('check', 'sm') + '</span><span class="et"><b>' + e.n + '. ' + esc(e.title || 'Без назви') + '</b>' + (e.released ? '<span>' + esc(e.released) + '</span>' : '') + '</span>' + (e.rating != null ? '<span class="er">' + e.rating.toFixed(1) + '</span>' : '') + '</button>';
+      h += '<button id="ep-' + e.n + '" class="ep' + (on ? ' on' : '') + '" data-act="ep" data-e="' + e.n + '" aria-pressed="' + (!!on) + '"><span class="box">' + ic('check', 'sm') + '</span><span class="et"><b>' + e.n + '. ' + esc(e.title || 'Без назви') + '</b>' + (e.released ? '<span>' + esc(e.released) + '</span>' : '') + '</span>' + (e.rating != null ? '<span class="er">' + e.rating.toFixed(1) + '</span>' : '') + '</button>';
     });
     return h;
+  }
+  // Оцінки серій IMDb (з OMDb) стовпчиками, як на IMDb: пунктир — середня, золотом — найкраща
+  function epChart(eps, n, lib) {
+    var rs = eps.filter(function (e) { return e.rating != null; });
+    if (rs.length < 2) return '';
+    var vals = rs.map(function (e) { return e.rating; }), mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals), avg = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
+    var hOf = function (v) { return Math.round(26 + (mx > mn ? (v - mn) / (mx - mn) : 0.5) * 46); };
+    var bars = eps.map(function (e) {
+      var on = lib && lib.watched[F.epKey(n, e.n)], best = e.rating != null && e.rating === mx;
+      return '<button type="button" class="ebar' + (best ? ' best' : '') + (on ? ' on' : '') + '" data-act="epjump" data-e="' + e.n + '" aria-label="Серія ' + e.n + (e.rating != null ? ', IMDb ' + e.rating.toFixed(1) : ', без оцінки') + '">' + (e.rating != null ? '<span class="eb" style="height:' + hOf(e.rating) + 'px">' + e.rating.toFixed(1) + '</span>' : '<span class="eb none">—</span>') + '<span class="el">E' + e.n + '</span></button>';
+    }).join('');
+    return '<div class="echart"><p class="ehead">Оцінки серій IMDb <span class="avg">★ ' + avg.toFixed(1) + '</span> <span class="sub">у середньому</span></p><div class="escroll"><div class="ebars" style="--avg:' + (hOf(avg) + 22) + 'px">' + bars + '</div></div></div>';
   }
   function sheetTr(sh, lib, it) {
     var ex = sh.extras && sh.extras.data;
@@ -1772,6 +1785,7 @@
         sh2.translating = false; if (ui.sheet === sh2) { renderSheet(); render(); } break;
       }
       case 'season': loadSeasonNow(Number(el.dataset.n)); break;
+      case 'epjump': { var er = document.getElementById('ep-' + Math.floor(Number(el.dataset.e))); if (er) { er.scrollIntoView({ behavior: 'smooth', block: 'center' }); er.classList.remove('flash'); void er.offsetWidth; er.classList.add('flash'); } break; }
       case 'ep': {
         var it2 = sheetItem(); if (!it2) return;
         if (!F.getItem(it2.id)) { var lib2 = F.setStatus(it2, 'watching'); var t = ui.sheet.tmp[ui.sheet.season]; if (t) { lib2.seasons[String(ui.sheet.season)] = t; } }
