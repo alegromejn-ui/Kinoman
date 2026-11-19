@@ -709,8 +709,6 @@
   function describeError(e) {
     var c = e && e.code;
     var g = describeGemError(e) || describeTmdbError(e) || describeSyncError(e); if (g) return g;
-    if (c === 'NEWS_NETWORK') return 'Немає зв’язку. Перевірте інтернет і спробуйте ще раз.';
-    if (c === 'NEWS_HTTP') return e.status === 404 ? 'Новини ще збираються. Зазирніть за кілька хвилин.' : 'Не вдалося завантажити новини (код ' + e.status + '). Спробуйте пізніше.';
     if (e && e.code === 'NO_IMDB') return 'Для цього тайтла в TMDB немає IMDb ID, тож відкрити його тут не вдасться.';
     if (c === 'NO_KEY') return 'Спершу додайте ключ OMDb у розділі «Ще».';
     if (c === 'INVALID_KEY') return 'OMDb не прийняв ключ. Перевірте, чи ви скопіювали його повністю і чи підтвердили його листом на пошті.';
@@ -1314,21 +1312,6 @@
     out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
     catCache[ck] = { t: now, res: out }; return out;
   }
-  // Новини кіно: GitHub Actions кожні 2 години збирає Google News у гілку news-data (scripts/news.py)
-  var NEWS_URL = 'https://raw.githubusercontent.com/alegromejn-ui/kinoman/news-data/news.json';
-  function newsCached() { try { var o = JSON.parse(localStorage.getItem('kinoman_news2') || 'null'); return o && Array.isArray(o.items) ? o : null; } catch (e) { return null; } }
-  async function filmNews(force) {
-    var c = newsCached(); if (!force && c && FB.now() - c.got < 20 * 60000) return c;
-    var res; try { res = await FB.fetch(NEWS_URL + '?v=' + Math.floor(FB.now() / 300000), { cache: 'no-cache' }); } catch (e) { throw err('NEWS_NETWORK'); }
-    if (!res.ok) { var e2 = err('NEWS_HTTP'); e2.status = res.status; throw e2; }
-    var d = await res.json().catch(function () { return null; });
-    var items = (d && Array.isArray(d.items) ? d.items : []).map(function (x) {
-      return x && clean(x.title) && /^https:\/\//.test(String(x.url || '')) ? { title: clean(x.title).slice(0, 220), source: clean(x.source).slice(0, 60), url: String(x.url), t: Number(x.t) * 1000 || 0 } : null;
-    }).filter(Boolean);
-    var out = { t: Number(d && d.t) * 1000 || FB.now(), got: FB.now(), items: items };
-    try { localStorage.setItem('kinoman_news2', JSON.stringify(out)); } catch (e) { /* лише на цей сеанс */ }
-    return out;
-  }
   // Календар: усе з власних списків на days днів уперед (без обмеження кількості)
   function calendar(days) {
     var today = ymd(FB.now()), out = [];
@@ -1447,7 +1430,7 @@
     collName: collName, tmdbCollection: tmdbCollection, searchMarathons: searchMarathons, aiMarathon: aiMarathon, saveMarathon: saveMarathon, removeMarathon: removeMarathon, marathons: marathons, marathonOf: marathonOf,
     setArch: setArch, archived: archived, oldCount: oldCount, SORTS_FOR: SORTS_FOR,
     backupNow: backupNow, backupDue: backupDue, autoBackup: autoBackup, listBackups: listBackups, restoreBackup: restoreBackup,
-    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, kyivstar: kyivstar, kyivstarText: kyivstarText, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, isToon: isToon, tmdbItem: tmdbItem, toonWest: toonWest, setToonWest: setToonWest, studios: studios, studioDef: studioDef, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, premieres: premieres, filmNews: filmNews, newsCached: newsCached, COLL_GENRES: COLL_GENRES, COLL_AGES: COLL_AGES, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
+    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, kyivstar: kyivstar, kyivstarText: kyivstarText, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, isToon: isToon, tmdbItem: tmdbItem, toonWest: toonWest, setToonWest: setToonWest, studios: studios, studioDef: studioDef, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, premieres: premieres, COLL_GENRES: COLL_GENRES, COLL_AGES: COLL_AGES, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
     getItem: getItem, setStatus: setStatus, setMyRating: setMyRating, setNote: setNote, removeItem: removeItem, restoreItem: restoreItem, refresh: refresh,
     toggleEpisode: toggleEpisode, setSeasonWatched: setSeasonWatched, seasonProgress: seasonProgress, watchedCount: watchedCount,
     list: list, genres: genres, randomPick: randomPick, stats: stats, fmtMinutes: fmtMinutes, SORTS: SORTS, brief: brief,

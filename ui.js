@@ -172,37 +172,7 @@
       return '<button class="person" data-act="person" data-pid="' + p.id + '" data-name="' + esc(p.name) + '" data-photo="' + esc(p.photo) + '"><span class="pic"><span class="ph">' + esc(initials(p.name)) + '</span>' + (p.photo ? '<img src="' + esc(F.tmdbImg(p.photo, 'w185')) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') + '</span><b>' + esc(p.name) + '</b>' + (p.dept === 'dir' ? '<span>Режисер</span>' : '') + '</button>';
     }).join('') + '</div></section>';
   }
-  function calEntry() { return '<button class="marentry" data-act="cal">' + ic('clock', 'sm') + '<span><b>Календар прем’єр</b><span>Ваші серії й фільми та всі прем’єри кіно на два місяці вперед</span></span>' + ic('right', 'sm') + '</button>' + newsEntry(); }
-  // ---------- Новини кіно (Gemini з пошуком Google) ----------
-  function newsEntry() { return '<button class="marentry" data-act="filmnews">' + ic('sparkle', 'sm') + '<span><b>Новини кіно</b><span>Свіжі новини фільмів і серіалів з українських видань</span></span>' + ic('right', 'sm') + '</button>'; }
-  function openNews(force) {
-    if (ui.sheet && !ui.sheet.wheel && !ui.sheet.news) pushCurrent();
-    var n = ui.news = ui.news || {}; ui.sheet = { news: true };
-    if (!n.data) n.data = F.newsCached();
-    if (!n.loading) {
-      n.loading = true; n.error = null;
-      F.filmNews(!!force).then(function (d) { n.data = d; }, function (e) { n.error = e; }).then(function () { n.loading = false; if (ui.sheet && ui.sheet.news) renderSheet(); });
-    }
-    renderSheet();
-  }
-  function agoT(t) {
-    var m = Math.max(0, Math.round((FB.now() - t) / 60000));
-    if (m < 60) return m < 2 ? 'щойно' : m + ' хв тому';
-    var h = Math.round(m / 60); if (h < 24) return h + ' ' + plural(h, 'годину', 'години', 'годин') + ' тому';
-    return ago(Math.round(h / 24));
-  }
-  function newsSheetHtml() {
-    var n = ui.news || {}, d = n.data;
-    var h = '<div class="sheetbar">' + (ui.stack.length ? '<button class="back" data-act="back" aria-label="Назад">' + ic('left') + '</button>' : '') + '<button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button></div><div class="coll fnews"><h3>Новини кіно</h3>';
-    h += '<p class="sub">З українських видань через Google News, за останній тиждень' + (d ? '. Оновлено ' + agoT(d.t) : '') + '. <button class="lnk" data-act="newsre"' + (n.loading ? ' disabled' : '') + '>Оновити</button></p>';
-    if (n.error && !(d && d.items.length)) h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(n.error)) + '</div></div>';
-    if (n.loading && !d) return h + skWait('Завантажую новини', 4) + '</div>';
-    if (d && !d.items.length) return h + emptyHtml('sparkle', 'Поки порожньо', 'Свіжих новин не знайшлося. Зазирніть пізніше.') + '</div>';
-    if (d) h += '<div class="fn-list">' + d.items.map(function (x) {
-      return '<a class="fn" href="' + esc(x.url) + '" target="_blank" rel="noopener noreferrer"><b>' + esc(x.title) + '</b><span class="fn-m">' + esc([x.source, x.t ? agoT(x.t) : ''].filter(Boolean).join(' · ')) + '</span></a>';
-    }).join('') + '</div>';
-    return h + '</div>';
-  }
+  function calEntry() { return '<button class="marentry" data-act="cal">' + ic('clock', 'sm') + '<span><b>Календар прем’єр</b><span>Ваші серії й фільми та всі прем’єри кіно на два місяці вперед</span></span>' + ic('right', 'sm') + '</button>'; }
   // ---------- Календар прем’єр ----------
   var MON_S = ['січ', 'лют', 'бер', 'кві', 'тра', 'чер', 'лип', 'сер', 'вер', 'жов', 'лис', 'гру'], MON_G = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
   var WD_S = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'], WD_L = ['понеділок', 'вівторок', 'середа', 'четвер', 'п’ятниця', 'субота', 'неділя'], CAL_DAYS = 62;
@@ -1085,7 +1055,6 @@
   }
   function sheetHtml() {
     if (ui.sheet.cal) return calHtml();
-    if (ui.sheet.news) return newsSheetHtml();
     var sh = ui.sheet;
     if (sh.person) return personHtml(sh);
     if (sh.wheel) return wheelHtml(sh);
@@ -1463,7 +1432,6 @@
       cat('', 'Головна') + cat('movie', 'Фільми') + cat('tv', 'Серіали') + cat('toon', 'Мультики') +
       '<button class="nl" data-act="tab" data-tab="' + (ui.libTab || 'watching') + '"' + cur(lib) + '>Моя колекція</button>' +
       '<button class="nl" data-act="cal">Календар</button>' +
-      '<button class="nl" data-act="filmnews">Новини</button>' +
       '<button class="nl" data-act="tab" data-tab="search"' + cur(st === 'search') + '>Підбір</button>' +
       '<button class="nl ico last" data-act="tab" data-tab="more" aria-label="Налаштування і статистика" title="Налаштування і статистика"' + cur(st === 'more') + '>' + ic('more') + '</button>';
   }
@@ -1706,8 +1674,6 @@
       case 'cal': if (ui.sheet && !ui.sheet.wheel) pushCurrent(); else ui.stack = []; ui.sheet = { cal: true }; renderSheet(); calLoadMore(); if (ui.calMode === 'all') premLoad(); break;
       case 'calmode': ui.calMode = el.dataset.m === 'all' ? 'all' : ''; if (ui.calMode === 'all') premLoad(); renderSheet(); break;
       case 'premre': premLoad(true); renderSheet(); break;
-      case 'filmnews': if (!ui.sheet) ui.stack = []; openNews(false); break;
-      case 'newsre': openNews(true); break;
       case 'desk': ui.deskAll = !el.dataset.mt; if (el.dataset.mt) ui.homeMt = el.dataset.mt === 'tv' ? 'tv' : el.dataset.mt === 'toon' ? 'toon' : 'movie'; ui.homeGenre = ''; ui.heroIx = 0; ui.heroKey = ''; setTab('home'); break;
       case 'spotgo': spotGo(el.dataset.q || ''); break;
       case 'type': ui.type = el.dataset.type; if (ui.q.trim() && ui.searched) doSearch(false); else render(); break;
