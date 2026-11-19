@@ -1289,7 +1289,9 @@
     var mp = { language: 'uk-UA', region: 'UA', 'release_date.gte': from, 'release_date.lte': to, with_release_type: '2|3', sort_by: 'popularity.desc', include_adult: 'false' };
     var tp = { language: 'uk-UA', 'first_air_date.gte': from, 'first_air_date.lte': to, sort_by: 'popularity.desc', include_adult: 'false', without_genres: '10764|10767|10763|10766' };
     var ds = await Promise.all([tmdb('/discover/movie', ext(mp, { page: 1 })), tmdb('/discover/movie', ext(mp, { page: 2 })).catch(function () { return {}; }), tmdb('/discover/tv', ext(tp, { page: 1 }))]);
-    var ok = function (r) { return r && r.id > 0 && imgPath(r.poster_path) && clean(r.title || r.name) && r.original_language !== 'ru'; };
+    // без російських і азійських (китайських, японських, корейських) — крім «Гри в кальмара» (TMDB 93405)
+    var ASIA_PREM = ['zh', 'cn', 'ja', 'ko'], squid = function (r) { return r.id === 93405 || /squid game|오징어 게임|гра в кальмара/i.test(String(r.original_name || r.original_title || '') + ' ' + String(r.name || r.title || '')); };
+    var ok = function (r) { return r && r.id > 0 && imgPath(r.poster_path) && clean(r.title || r.name) && r.original_language !== 'ru' && (ASIA_PREM.indexOf(r.original_language) < 0 || squid(r)); };
     var seen = {}, movies = ds[0].results && ds[1].results ? ds[0].results.concat(ds[1].results) : (ds[0].results || []);
     movies = movies.filter(function (r) { if (!ok(r) || seen[r.id]) return false; seen[r.id] = 1; return true; }).slice(0, 36);
     // дата саме українського прокату (у списку TMDB лише дата світової прем’єри)
