@@ -1290,20 +1290,24 @@
     var tp = { language: 'uk-UA', 'first_air_date.gte': from, 'first_air_date.lte': to, sort_by: 'popularity.desc', include_adult: 'false', without_genres: '10764|10767|10763|10766' };
     var ds = await Promise.all([tmdb('/discover/movie', ext(mp, { page: 1 })), tmdb('/discover/movie', ext(mp, { page: 2 })).catch(function () { return {}; }), tmdb('/discover/tv', ext(tp, { page: 1 }))]);
     // без російських і азійських (китайських, японських, корейських) — крім «Гри в кальмара» (TMDB 93405)
-    var ASIA_PREM = ['zh', 'cn', 'ja', 'ko'], squid = function (r) { return r.id === 93405 || /squid game|오징어 게임|гра в кальмара/i.test(String(r.original_name || r.original_title || '') + ' ' + String(r.name || r.title || '')); };
-    var ok = function (r) { return r && r.id > 0 && imgPath(r.poster_path) && clean(r.title || r.name) && r.original_language !== 'ru' && (ASIA_PREM.indexOf(r.original_language) < 0 || squid(r)); };
+    // а також індійських, австрійських, данських, угорських і хорватських (за мовою й країною походження)
+    var ASIA_PREM = ['zh', 'cn', 'ja', 'ko', 'hi', 'ta', 'te', 'ml', 'kn', 'bn', 'mr', 'pa', 'gu', 'or', 'as', 'ur', 'da', 'hu', 'hr'], NO_C = ['CN', 'TW', 'HK', 'JP', 'KR', 'IN', 'AT', 'DK', 'HU', 'HR'];
+    var badC = function (cs) { return (Array.isArray(cs) ? cs : []).some(function (c) { return NO_C.indexOf(typeof c === 'string' ? c : c && c.iso_3166_1) >= 0; }); };
+    var squid = function (r) { return r.id === 93405 || /squid game|오징어 게임|гра в кальмара/i.test(String(r.original_name || r.original_title || '') + ' ' + String(r.name || r.title || '')); };
+    var ok = function (r) { return r && r.id > 0 && imgPath(r.poster_path) && clean(r.title || r.name) && r.original_language !== 'ru' && ((ASIA_PREM.indexOf(r.original_language) < 0 && !badC(r.origin_country)) || squid(r)); };
     var seen = {}, movies = ds[0].results && ds[1].results ? ds[0].results.concat(ds[1].results) : (ds[0].results || []);
     movies = movies.filter(function (r) { if (!ok(r) || seen[r.id]) return false; seen[r.id] = 1; return true; }).slice(0, 36);
     // дата саме українського прокату (у списку TMDB лише дата світової прем’єри)
     var dates = await Promise.all(movies.map(function (r) {
-      return tmdb('/movie/' + Math.floor(r.id) + '/release_dates', {}).then(function (d) {
-        var ua = (Array.isArray(d.results) ? d.results : []).filter(function (x) { return x && x.iso_3166_1 === 'UA'; })[0], best = '';
+      return tmdb('/movie/' + Math.floor(r.id), { append_to_response: 'release_dates' }).then(function (d0) {
+        if (badC(d0.origin_country) || badC(d0.production_countries && d0.production_countries.length === 1 ? d0.production_countries : [])) return 'x';
+        var d = d0.release_dates || {}, ua = (Array.isArray(d.results) ? d.results : []).filter(function (x) { return x && x.iso_3166_1 === 'UA'; })[0], best = '';
         ((ua && ua.release_dates) || []).forEach(function (x) { var dt = String(x.release_date || '').slice(0, 10); if ((x.type === 3 || x.type === 2) && dt >= from && dt <= to && (!best || dt < best)) best = dt; });
         return best;
       }, function () { return ''; });
     }));
     var out = [];
-    movies.forEach(function (r, i) { var dt = dates[i] || String(r.release_date || ''); if (!/^\d{4}-\d{2}-\d{2}$/.test(dt) || dt < from || dt > to) return; out.push({ r: { tid: Math.floor(r.id), mt: 'movie', title: clean(r.title), year: yearOf(dt), poster: r.poster_path }, date: dt, label: 'Прем’єра в кіно', kind: 'prem' }); });
+    movies.forEach(function (r, i) { if (dates[i] === 'x') return; var dt = dates[i] || String(r.release_date || ''); if (!/^\d{4}-\d{2}-\d{2}$/.test(dt) || dt < from || dt > to) return; out.push({ r: { tid: Math.floor(r.id), mt: 'movie', title: clean(r.title), year: yearOf(dt), poster: r.poster_path }, date: dt, label: 'Прем’єра в кіно', kind: 'prem' }); });
     (ds[2].results || []).filter(ok).slice(0, 20).forEach(function (r) { var dt = String(r.first_air_date || ''); if (!/^\d{4}-\d{2}-\d{2}$/.test(dt) || dt < from || dt > to) return; out.push({ r: { tid: Math.floor(r.id), mt: 'tv', title: clean(r.name), year: yearOf(dt), poster: r.poster_path }, date: dt, label: 'Новий серіал', kind: 'ep' }); });
     out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
     catCache[ck] = { t: now, res: out }; return out;
