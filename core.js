@@ -1282,6 +1282,53 @@
     sagaBusy.then(function () { sagaBusy = null; }, function () { sagaBusy = null; });
     return sagaBusy;
   }
+  // Усі прем’єри: фільми, що виходять у прокат в Україні, і нові серіали на days днів уперед
+  async function premieres(days) {
+    var now = FB.now(), from = ymd(now), to = ymd(now + days * 86400000), ck = 'prem:' + from + ':' + days, c = catCache[ck];
+    if (c && now - c.t < 3 * 3600000) return c.res;
+    var mp = { language: 'uk-UA', region: 'UA', 'release_date.gte': from, 'release_date.lte': to, with_release_type: '2|3', sort_by: 'popularity.desc', include_adult: 'false' };
+    var tp = { language: 'uk-UA', 'first_air_date.gte': from, 'first_air_date.lte': to, sort_by: 'popularity.desc', include_adult: 'false', without_genres: '10764|10767|10763|10766' };
+    var ds = await Promise.all([tmdb('/discover/movie', ext(mp, { page: 1 })), tmdb('/discover/movie', ext(mp, { page: 2 })).catch(function () { return {}; }), tmdb('/discover/tv', ext(tp, { page: 1 }))]);
+    var ok = function (r) { return r && r.id > 0 && imgPath(r.poster_path) && clean(r.title || r.name) && r.original_language !== 'ru'; };
+    var seen = {}, movies = ds[0].results && ds[1].results ? ds[0].results.concat(ds[1].results) : (ds[0].results || []);
+    movies = movies.filter(function (r) { if (!ok(r) || seen[r.id]) return false; seen[r.id] = 1; return true; }).slice(0, 36);
+    // дата саме українського прокату (у списку TMDB лише дата світової прем’єри)
+    var dates = await Promise.all(movies.map(function (r) {
+      return tmdb('/movie/' + Math.floor(r.id) + '/release_dates', {}).then(function (d) {
+        var ua = (Array.isArray(d.results) ? d.results : []).filter(function (x) { return x && x.iso_3166_1 === 'UA'; })[0], best = '';
+        ((ua && ua.release_dates) || []).forEach(function (x) { var dt = String(x.release_date || '').slice(0, 10); if ((x.type === 3 || x.type === 2) && dt >= from && dt <= to && (!best || dt < best)) best = dt; });
+        return best;
+      }, function () { return ''; });
+    }));
+    var out = [];
+    movies.forEach(function (r, i) { var dt = dates[i] || String(r.release_date || ''); if (!/^\d{4}-\d{2}-\d{2}$/.test(dt) || dt < from || dt > to) return; out.push({ r: { tid: Math.floor(r.id), mt: 'movie', title: clean(r.title), year: yearOf(dt), poster: r.poster_path }, date: dt, label: 'Прем’єра в кіно', kind: 'prem' }); });
+    (ds[2].results || []).filter(ok).slice(0, 20).forEach(function (r) { var dt = String(r.first_air_date || ''); if (!/^\d{4}-\d{2}-\d{2}$/.test(dt) || dt < from || dt > to) return; out.push({ r: { tid: Math.floor(r.id), mt: 'tv', title: clean(r.name), year: yearOf(dt), poster: r.poster_path }, date: dt, label: 'Новий серіал', kind: 'ep' }); });
+    out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    catCache[ck] = { t: now, res: out }; return out;
+  }
+  // Новини кіно: Gemini шукає в Google свіжі новини; кеш на 3 години в цьому браузері
+  function newsCached() { try { var o = JSON.parse(localStorage.getItem('kinoman_news') || 'null'); return o && Array.isArray(o.items) ? o : null; } catch (e) { return null; } }
+  async function filmNews(force) {
+    var c = newsCached(); if (!force && c && FB.now() - c.t < 3 * 3600000) return c;
+    var today = ymd(FB.now());
+    var prompt = 'Сьогодні ' + today + '. Знайди в Google 10 найсвіжіших і найважливіших новин світу кіно та серіалів за останні 7 днів: трейлери, анонси й дати виходу, продовження, кастинг, касові збори, нагороди; якщо є, додай 1–2 новини українського кіно. Не вигадуй: лише те, що знайшов у джерелах. '
+      + 'Відповідай ЛИШЕ JSON-масивом без пояснень і без ```: [{"title":"заголовок українською","summary":"2–3 речення українською","date":"YYYY-MM-DD","source":"назва видання","url":"посилання на статтю"}]. Від найновішої до найстарішої.';
+    var data = await gemini({ contents: [{ role: 'user', parts: [{ text: prompt }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.2 } });
+    var cand = data && data.candidates && data.candidates[0], text = ((cand && cand.content && cand.content.parts) || []).map(function (p) { return p.text || ''; }).join('');
+    var m = text.match(/\[[\s\S]*\]/), arr; try { arr = JSON.parse(m ? m[0] : text); } catch (e) { throw err('GEM_BAD'); }
+    // посилання беремо з джерел, які реально знайшов пошук; інакше — пошук Google за заголовком
+    var chunks = ((cand.groundingMetadata && cand.groundingMetadata.groundingChunks) || []).map(function (g) { return g && g.web; }).filter(function (w) { return w && /^https:\/\//.test(String(w.uri || '')); });
+    var items = (Array.isArray(arr) ? arr : []).map(function (x) {
+      if (!x || !clean(x.title)) return null;
+      var src = clean(x.source).slice(0, 60), low = src.toLowerCase(), hit = low ? chunks.filter(function (w) { var t = String(w.title || '').toLowerCase(); return t && (t.indexOf(low) >= 0 || low.indexOf(t.replace(/^www\./, '')) >= 0); })[0] : null;
+      var title = clean(x.title).slice(0, 200);
+      return { title: title, summary: clean(x.summary).slice(0, 600), date: /^\d{4}-\d{2}-\d{2}$/.test(String(x.date)) && String(x.date) <= today ? String(x.date) : '', source: src, url: hit ? hit.uri : 'https://www.google.com/search?q=' + encodeURIComponent(title) };
+    }).filter(Boolean).slice(0, 12);
+    if (!items.length) throw err('GEM_BAD');
+    var res = { t: FB.now(), items: items };
+    try { localStorage.setItem('kinoman_news', JSON.stringify(res)); } catch (e) { /* лише на цей сеанс */ }
+    return res;
+  }
   // Календар: усе з власних списків на days днів уперед (без обмеження кількості)
   function calendar(days) {
     var today = ymd(FB.now()), out = [];
@@ -1400,7 +1447,7 @@
     collName: collName, tmdbCollection: tmdbCollection, searchMarathons: searchMarathons, aiMarathon: aiMarathon, saveMarathon: saveMarathon, removeMarathon: removeMarathon, marathons: marathons, marathonOf: marathonOf,
     setArch: setArch, archived: archived, oldCount: oldCount, SORTS_FOR: SORTS_FOR,
     backupNow: backupNow, backupDue: backupDue, autoBackup: autoBackup, listBackups: listBackups, restoreBackup: restoreBackup,
-    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, kyivstar: kyivstar, kyivstarText: kyivstarText, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, isToon: isToon, tmdbItem: tmdbItem, toonWest: toonWest, setToonWest: setToonWest, studios: studios, studioDef: studioDef, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, COLL_GENRES: COLL_GENRES, COLL_AGES: COLL_AGES, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
+    keyOf: keyOf, setKey: setKey, tmdbKeyOf: tmdbKeyOf, setTmdbKey: setTmdbKey, tmdbExtras: tmdbExtras, setExtras: setExtras, kyivstar: kyivstar, kyivstarText: kyivstarText, tmdbImdbId: tmdbImdbId, charts: charts, setPlan: setPlan, setTmdbRef: setTmdbRef, tmdbStatus: tmdbStatus, isToon: isToon, tmdbItem: tmdbItem, toonWest: toonWest, setToonWest: setToonWest, studios: studios, studioDef: studioDef, fillTmdbIds: fillTmdbIds, collDefs: collDefs, collection: collection, premieres: premieres, filmNews: filmNews, newsCached: newsCached, COLL_GENRES: COLL_GENRES, COLL_AGES: COLL_AGES, CATS: CATS, suggest: suggest, testTmdb: testTmdb, tmdbImg: tmdbImg, gemKeyOf: gemKeyOf, setGemKey: setGemKey, foreignGemKey: foreignGemKey, useForeignGemKey: useForeignGemKey, translateItem: translateItem, setTranslation: setTranslation, testGemini: testGemini, genreUk: genreUk, countryUk: countryUk, langUk: langUk, dateUk: dateUk, hasCyrillic: hasCyrillic, search: search, details: details, loadSeason: loadSeason, testKey: testKey, describeError: describeError, toItem: toItem,
     getItem: getItem, setStatus: setStatus, setMyRating: setMyRating, setNote: setNote, removeItem: removeItem, restoreItem: restoreItem, refresh: refresh,
     toggleEpisode: toggleEpisode, setSeasonWatched: setSeasonWatched, seasonProgress: seasonProgress, watchedCount: watchedCount,
     list: list, genres: genres, randomPick: randomPick, stats: stats, fmtMinutes: fmtMinutes, SORTS: SORTS, brief: brief,

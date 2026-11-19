@@ -172,7 +172,34 @@
       return '<button class="person" data-act="person" data-pid="' + p.id + '" data-name="' + esc(p.name) + '" data-photo="' + esc(p.photo) + '"><span class="pic"><span class="ph">' + esc(initials(p.name)) + '</span>' + (p.photo ? '<img src="' + esc(F.tmdbImg(p.photo, 'w185')) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') + '</span><b>' + esc(p.name) + '</b>' + (p.dept === 'dir' ? '<span>Режисер</span>' : '') + '</button>';
     }).join('') + '</div></section>';
   }
-  function calEntry() { return '<button class="marentry" data-act="cal">' + ic('clock', 'sm') + '<span><b>Календар прем’єр</b><span>Нові серії та фільми з ваших списків на два місяці вперед</span></span>' + ic('right', 'sm') + '</button>'; }
+  function calEntry() { return '<button class="marentry" data-act="cal">' + ic('clock', 'sm') + '<span><b>Календар прем’єр</b><span>Ваші серії й фільми та всі прем’єри кіно на два місяці вперед</span></span>' + ic('right', 'sm') + '</button>' + newsEntry(); }
+  // ---------- Новини кіно (Gemini з пошуком Google) ----------
+  function newsEntry() { return '<button class="marentry" data-act="filmnews">' + ic('sparkle', 'sm') + '<span><b>Новини кіно</b><span>Свіжі новини фільмів і серіалів за тиждень</span></span>' + ic('right', 'sm') + '</button>'; }
+  function openNews(force) {
+    if (ui.sheet && !ui.sheet.wheel && !ui.sheet.news) pushCurrent();
+    var n = ui.news = ui.news || {}; ui.sheet = { news: true };
+    if (!n.data) n.data = F.newsCached();
+    var fresh = n.data && FB.now() - n.data.t < 3 * 3600000;
+    if (F.gemKeyOf() && !n.loading && (force || !fresh)) {
+      n.loading = true; n.error = null;
+      F.filmNews(!!force).then(function (d) { n.data = d; }, function (e) { n.error = e; }).then(function () { n.loading = false; if (ui.sheet && ui.sheet.news) renderSheet(); });
+    }
+    renderSheet();
+  }
+  function newsSheetHtml() {
+    var n = ui.news || {}, d = n.data;
+    var h = '<div class="sheetbar">' + (ui.stack.length ? '<button class="back" data-act="back" aria-label="Назад">' + ic('left') + '</button>' : '') + '<button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button></div><div class="coll fnews"><h3>Новини кіно</h3>';
+    if (!F.gemKeyOf()) return h + emptyHtml('sparkle', 'Потрібен ключ Gemini', 'Новини збирає Gemini з пошуку Google. Додайте ключ Gemini у розділі «Ще».') + '</div>';
+    h += '<p class="sub">Gemini збирає їх з пошуку Google' + (d ? ', оновлено ' + new Date(d.t).toLocaleString('uk-UA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '') + '. <button class="lnk" data-act="newsre"' + (n.loading ? ' disabled' : '') + '>Оновити</button></p>';
+    if (n.error) h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(n.error)) + '</div></div>';
+    if (n.loading && !d) return h + skWait('Gemini шукає новини', 4) + '</div>';
+    if (n.loading) h += '<p class="fine" role="status">Шукаю свіжіші…</p>';
+    if (d) h += '<div class="fn-list">' + d.items.map(function (x) {
+      var dt = x.date ? x.date.split('-') : null;
+      return '<a class="fn" href="' + esc(x.url) + '" target="_blank" rel="noopener noreferrer"><b>' + esc(x.title) + '</b>' + (x.summary ? '<span class="fn-s">' + esc(x.summary) + '</span>' : '') + '<span class="fn-m">' + esc([dt ? Number(dt[2]) + ' ' + MON_G[Number(dt[1]) - 1] : '', x.source].filter(Boolean).join(' · ')) + '</span></a>';
+    }).join('') + '</div><p class="fine">Короткі описи складає штучний інтелект, тож деталі краще перевіряти за посиланням.</p>';
+    return h + '</div>';
+  }
   // ---------- Календар прем’єр ----------
   var MON_S = ['січ', 'лют', 'бер', 'кві', 'тра', 'чер', 'лип', 'сер', 'вер', 'жов', 'лис', 'гру'], MON_G = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
   var WD_S = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'], WD_L = ['понеділок', 'вівторок', 'середа', 'четвер', 'п’ятниця', 'субота', 'неділя'], CAL_DAYS = 62;
@@ -197,10 +224,22 @@
     });
   }
   function calAct(x) { return x.fol ? ' data-act="cat"' + catData(x.r) : ' data-act="open" data-id="' + x.item.id + '"'; }
+  // «Усі прем’єри»: фільми в українському прокаті й нові серіали з TMDB
+  function premLoad(force) {
+    var p = ui.prem = ui.prem || {}; if (p.loading || (p.items && !force) || !F.tmdbKeyOf()) return;
+    p.loading = true; p.error = null;
+    F.premieres(CAL_DAYS).then(function (r) { p.items = r.map(function (x) { return { fol: true, r: x.r, item: { id: 'p' + x.r.mt + x.r.tid, title: x.r.title, titleUk: '', poster: F.tmdbImg(x.r.poster, 'w185') }, date: x.date, label: x.label, kind: x.kind }; }); }, function (e) { p.error = e; })
+      .then(function () { p.loading = false; if (ui.sheet && ui.sheet.cal) renderSheet(); });
+  }
   function calHtml() {
-    var es = calEntries(), today = F.today();
-    var h = '<div class="sheetbar"><button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button></div><div class="coll cal"><h3>Календар прем’єр</h3><p class="sub">Нові серії, прем’єри фільмів і заплановані перегляди з ваших списків на два місяці вперед, а також нові фільми людей, за якими ви стежите.</p>';
-    if (!es.length) return h + emptyHtml('clock', 'Найближчим часом нічого не виходить', 'Додайте серіали в «Дивлюсь» або ще не випущені фільми в «Обрані», і їхні дати з’являться тут.') + '</div>';
+    var all = ui.calMode === 'all', p = ui.prem || {}, es = all ? (p.items || []) : calEntries(), today = F.today();
+    var h = '<div class="sheetbar"><button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button></div><div class="coll cal"><h3>Календар прем’єр</h3>';
+    h += '<div class="seg" role="group" aria-label="Який календар">' + [['', 'Мій календар'], ['all', 'Усі прем’єри']].map(function (m) { return '<button type="button" data-act="calmode" data-m="' + m[0] + '" aria-pressed="' + ((ui.calMode || '') === m[0]) + '">' + m[1] + '</button>'; }).join('') + '</div>';
+    h += '<p class="sub">' + (all ? 'Фільми, що виходять у прокат в Україні, і нові серіали на два місяці вперед.' : 'Нові серії, прем’єри фільмів і заплановані перегляди з ваших списків на два місяці вперед, а також нові фільми людей, за якими ви стежите.') + '</p>';
+    if (all && !F.tmdbKeyOf()) return h + emptyHtml('clock', 'Потрібен ключ TMDB', 'Усі прем’єри беруться з TMDB. Додайте ключ TMDB у розділі «Ще».') + '</div>';
+    if (all && p.error) return h + '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(p.error)) + '<p style="margin:10px 0 0"><button class="btn sm" data-act="premre">Спробувати ще раз</button></p></div></div></div>';
+    if (all && !p.items) return h + '<div role="status" aria-label="Завантажуємо">' + skWait('Збираю прем’єри', 4) + '</div></div>';
+    if (!es.length) return h + (all ? emptyHtml('clock', 'Прем’єр не знайшлося', 'TMDB поки не має дат на найближчі два місяці.') : emptyHtml('clock', 'Найближчим часом нічого не виходить', 'Додайте серіали в «Дивлюсь» або ще не випущені фільми в «Обрані», і їхні дати з’являться тут.')) + '</div>';
     var by = {}; es.forEach(function (x) { (by[x.date] = by[x.date] || []).push(x); });
     var pic = function (it) { return '<span class="cal-p">' + (it.poster ? '<img src="' + esc(it.poster) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') + '</span>'; };
     var start = isoAdd(today, -isoDow(today)), end = isoAdd(start, 34);
@@ -1043,6 +1082,7 @@
   }
   function sheetHtml() {
     if (ui.sheet.cal) return calHtml();
+    if (ui.sheet.news) return newsSheetHtml();
     var sh = ui.sheet;
     if (sh.person) return personHtml(sh);
     if (sh.wheel) return wheelHtml(sh);
@@ -1420,6 +1460,7 @@
       cat('', 'Головна') + cat('movie', 'Фільми') + cat('tv', 'Серіали') + cat('toon', 'Мультики') +
       '<button class="nl" data-act="tab" data-tab="' + (ui.libTab || 'watching') + '"' + cur(lib) + '>Моя колекція</button>' +
       '<button class="nl" data-act="cal">Календар</button>' +
+      '<button class="nl" data-act="filmnews">Новини</button>' +
       '<button class="nl" data-act="tab" data-tab="search"' + cur(st === 'search') + '>Підбір</button>' +
       '<button class="nl ico last" data-act="tab" data-tab="more" aria-label="Налаштування і статистика" title="Налаштування і статистика"' + cur(st === 'more') + '>' + ic('more') + '</button>';
   }
@@ -1659,7 +1700,11 @@
       }
       case 'heropick': ui.heroIx = Number(el.dataset.i) || 0; paintHero(); break;
       case 'spot': openSpot(); break;
-      case 'cal': if (ui.sheet && !ui.sheet.wheel) pushCurrent(); else ui.stack = []; ui.sheet = { cal: true }; renderSheet(); calLoadMore(); break;
+      case 'cal': if (ui.sheet && !ui.sheet.wheel) pushCurrent(); else ui.stack = []; ui.sheet = { cal: true }; renderSheet(); calLoadMore(); if (ui.calMode === 'all') premLoad(); break;
+      case 'calmode': ui.calMode = el.dataset.m === 'all' ? 'all' : ''; if (ui.calMode === 'all') premLoad(); renderSheet(); break;
+      case 'premre': premLoad(true); renderSheet(); break;
+      case 'filmnews': if (!ui.sheet) ui.stack = []; openNews(false); break;
+      case 'newsre': openNews(true); break;
       case 'desk': ui.deskAll = !el.dataset.mt; if (el.dataset.mt) ui.homeMt = el.dataset.mt === 'tv' ? 'tv' : el.dataset.mt === 'toon' ? 'toon' : 'movie'; ui.homeGenre = ''; ui.heroIx = 0; ui.heroKey = ''; setTab('home'); break;
       case 'spotgo': spotGo(el.dataset.q || ''); break;
       case 'type': ui.type = el.dataset.type; if (ui.q.trim() && ui.searched) doSearch(false); else render(); break;
