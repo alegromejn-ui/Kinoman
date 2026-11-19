@@ -709,6 +709,8 @@
   function describeError(e) {
     var c = e && e.code;
     var g = describeGemError(e) || describeTmdbError(e) || describeSyncError(e); if (g) return g;
+    if (c === 'NEWS_NETWORK') return 'Немає зв’язку. Перевірте інтернет і спробуйте ще раз.';
+    if (c === 'NEWS_HTTP') return e.status === 404 ? 'Новини ще збираються. Зазирніть за кілька хвилин.' : 'Не вдалося завантажити новини (код ' + e.status + '). Спробуйте пізніше.';
     if (e && e.code === 'NO_IMDB') return 'Для цього тайтла в TMDB немає IMDb ID, тож відкрити його тут не вдасться.';
     if (c === 'NO_KEY') return 'Спершу додайте ключ OMDb у розділі «Ще».';
     if (c === 'INVALID_KEY') return 'OMDb не прийняв ключ. Перевірте, чи ви скопіювали його повністю і чи підтвердили його листом на пошті.';
@@ -1312,28 +1314,20 @@
     out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
     catCache[ck] = { t: now, res: out }; return out;
   }
-  // Новини кіно: Gemini шукає в Google свіжі новини; кеш на 3 години в цьому браузері
-  function newsCached() { try { var o = JSON.parse(localStorage.getItem('kinoman_news') || 'null'); return o && Array.isArray(o.items) ? o : null; } catch (e) { return null; } }
+  // Новини кіно: GitHub Actions кожні 2 години збирає Google News у гілку news-data (scripts/news.py)
+  var NEWS_URL = 'https://raw.githubusercontent.com/alegromejn-ui/kinoman/news-data/news.json';
+  function newsCached() { try { var o = JSON.parse(localStorage.getItem('kinoman_news2') || 'null'); return o && Array.isArray(o.items) ? o : null; } catch (e) { return null; } }
   async function filmNews(force) {
-    var c = newsCached(); if (!force && c && FB.now() - c.t < 3 * 3600000) return c;
-    var today = ymd(FB.now());
-    var prompt = 'Сьогодні ' + today + '. Знайди в Google 10 найсвіжіших і найважливіших новин світу кіно та серіалів за останні 7 днів: трейлери, анонси й дати виходу, продовження, кастинг, касові збори, нагороди; якщо є, додай 1–2 новини українського кіно. Не вигадуй: лише те, що знайшов у джерелах. '
-      + 'Відповідай ЛИШЕ JSON-масивом без пояснень і без ```: [{"title":"заголовок українською","summary":"2–3 речення українською","date":"YYYY-MM-DD","source":"назва видання","url":"посилання на статтю"}]. Від найновішої до найстарішої.';
-    var data = await gemini({ contents: [{ role: 'user', parts: [{ text: prompt }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.2 } });
-    var cand = data && data.candidates && data.candidates[0], text = ((cand && cand.content && cand.content.parts) || []).map(function (p) { return p.text || ''; }).join('');
-    var m = text.match(/\[[\s\S]*\]/), arr; try { arr = JSON.parse(m ? m[0] : text); } catch (e) { throw err('GEM_BAD'); }
-    // посилання беремо з джерел, які реально знайшов пошук; інакше — пошук Google за заголовком
-    var chunks = ((cand.groundingMetadata && cand.groundingMetadata.groundingChunks) || []).map(function (g) { return g && g.web; }).filter(function (w) { return w && /^https:\/\//.test(String(w.uri || '')); });
-    var items = (Array.isArray(arr) ? arr : []).map(function (x) {
-      if (!x || !clean(x.title)) return null;
-      var src = clean(x.source).slice(0, 60), low = src.toLowerCase(), hit = low ? chunks.filter(function (w) { var t = String(w.title || '').toLowerCase(); return t && (t.indexOf(low) >= 0 || low.indexOf(t.replace(/^www\./, '')) >= 0); })[0] : null;
-      var title = clean(x.title).slice(0, 200);
-      return { title: title, summary: clean(x.summary).slice(0, 600), date: /^\d{4}-\d{2}-\d{2}$/.test(String(x.date)) && String(x.date) <= today ? String(x.date) : '', source: src, url: hit ? hit.uri : 'https://www.google.com/search?q=' + encodeURIComponent(title) };
-    }).filter(Boolean).slice(0, 12);
-    if (!items.length) throw err('GEM_BAD');
-    var res = { t: FB.now(), items: items };
-    try { localStorage.setItem('kinoman_news', JSON.stringify(res)); } catch (e) { /* лише на цей сеанс */ }
-    return res;
+    var c = newsCached(); if (!force && c && FB.now() - c.got < 20 * 60000) return c;
+    var res; try { res = await FB.fetch(NEWS_URL + '?v=' + Math.floor(FB.now() / 300000), { cache: 'no-cache' }); } catch (e) { throw err('NEWS_NETWORK'); }
+    if (!res.ok) { var e2 = err('NEWS_HTTP'); e2.status = res.status; throw e2; }
+    var d = await res.json().catch(function () { return null; });
+    var items = (d && Array.isArray(d.items) ? d.items : []).map(function (x) {
+      return x && clean(x.title) && /^https:\/\//.test(String(x.url || '')) ? { title: clean(x.title).slice(0, 220), source: clean(x.source).slice(0, 60), url: String(x.url), t: Number(x.t) * 1000 || 0 } : null;
+    }).filter(Boolean);
+    var out = { t: Number(d && d.t) * 1000 || FB.now(), got: FB.now(), items: items };
+    try { localStorage.setItem('kinoman_news2', JSON.stringify(out)); } catch (e) { /* лише на цей сеанс */ }
+    return out;
   }
   // Календар: усе з власних списків на days днів уперед (без обмеження кількості)
   function calendar(days) {

@@ -174,30 +174,33 @@
   }
   function calEntry() { return '<button class="marentry" data-act="cal">' + ic('clock', 'sm') + '<span><b>Календар прем’єр</b><span>Ваші серії й фільми та всі прем’єри кіно на два місяці вперед</span></span>' + ic('right', 'sm') + '</button>' + newsEntry(); }
   // ---------- Новини кіно (Gemini з пошуком Google) ----------
-  function newsEntry() { return '<button class="marentry" data-act="filmnews">' + ic('sparkle', 'sm') + '<span><b>Новини кіно</b><span>Свіжі новини фільмів і серіалів за тиждень</span></span>' + ic('right', 'sm') + '</button>'; }
+  function newsEntry() { return '<button class="marentry" data-act="filmnews">' + ic('sparkle', 'sm') + '<span><b>Новини кіно</b><span>Свіжі новини фільмів і серіалів з українських видань</span></span>' + ic('right', 'sm') + '</button>'; }
   function openNews(force) {
     if (ui.sheet && !ui.sheet.wheel && !ui.sheet.news) pushCurrent();
     var n = ui.news = ui.news || {}; ui.sheet = { news: true };
     if (!n.data) n.data = F.newsCached();
-    var fresh = n.data && FB.now() - n.data.t < 3 * 3600000;
-    if (F.gemKeyOf() && !n.loading && (force || !fresh)) {
+    if (!n.loading) {
       n.loading = true; n.error = null;
       F.filmNews(!!force).then(function (d) { n.data = d; }, function (e) { n.error = e; }).then(function () { n.loading = false; if (ui.sheet && ui.sheet.news) renderSheet(); });
     }
     renderSheet();
   }
+  function agoT(t) {
+    var m = Math.max(0, Math.round((FB.now() - t) / 60000));
+    if (m < 60) return m < 2 ? 'щойно' : m + ' хв тому';
+    var h = Math.round(m / 60); if (h < 24) return h + ' ' + plural(h, 'годину', 'години', 'годин') + ' тому';
+    return ago(Math.round(h / 24));
+  }
   function newsSheetHtml() {
     var n = ui.news || {}, d = n.data;
     var h = '<div class="sheetbar">' + (ui.stack.length ? '<button class="back" data-act="back" aria-label="Назад">' + ic('left') + '</button>' : '') + '<button class="close" data-act="close" aria-label="Закрити">' + ic('x') + '</button></div><div class="coll fnews"><h3>Новини кіно</h3>';
-    if (!F.gemKeyOf()) return h + emptyHtml('sparkle', 'Потрібен ключ Gemini', 'Новини збирає Gemini з пошуку Google. Додайте ключ Gemini у розділі «Ще».') + '</div>';
-    h += '<p class="sub">Gemini збирає їх з пошуку Google' + (d ? ', оновлено ' + new Date(d.t).toLocaleString('uk-UA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '') + '. <button class="lnk" data-act="newsre"' + (n.loading ? ' disabled' : '') + '>Оновити</button></p>';
-    if (n.error) h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(n.error)) + '</div></div>';
-    if (n.loading && !d) return h + skWait('Gemini шукає новини', 4) + '</div>';
-    if (n.loading) h += '<p class="fine" role="status">Шукаю свіжіші…</p>';
+    h += '<p class="sub">З українських видань через Google News, за останній тиждень' + (d ? '. Оновлено ' + agoT(d.t) : '') + '. <button class="lnk" data-act="newsre"' + (n.loading ? ' disabled' : '') + '>Оновити</button></p>';
+    if (n.error && !(d && d.items.length)) h += '<div class="notice warn">' + ic('alert') + '<div>' + esc(F.describeError(n.error)) + '</div></div>';
+    if (n.loading && !d) return h + skWait('Завантажую новини', 4) + '</div>';
+    if (d && !d.items.length) return h + emptyHtml('sparkle', 'Поки порожньо', 'Свіжих новин не знайшлося. Зазирніть пізніше.') + '</div>';
     if (d) h += '<div class="fn-list">' + d.items.map(function (x) {
-      var dt = x.date ? x.date.split('-') : null;
-      return '<a class="fn" href="' + esc(x.url) + '" target="_blank" rel="noopener noreferrer"><b>' + esc(x.title) + '</b>' + (x.summary ? '<span class="fn-s">' + esc(x.summary) + '</span>' : '') + '<span class="fn-m">' + esc([dt ? Number(dt[2]) + ' ' + MON_G[Number(dt[1]) - 1] : '', x.source].filter(Boolean).join(' · ')) + '</span></a>';
-    }).join('') + '</div><p class="fine">Короткі описи складає штучний інтелект, тож деталі краще перевіряти за посиланням.</p>';
+      return '<a class="fn" href="' + esc(x.url) + '" target="_blank" rel="noopener noreferrer"><b>' + esc(x.title) + '</b><span class="fn-m">' + esc([x.source, x.t ? agoT(x.t) : ''].filter(Boolean).join(' · ')) + '</span></a>';
+    }).join('') + '</div>';
     return h + '</div>';
   }
   // ---------- Календар прем’єр ----------
