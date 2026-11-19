@@ -1209,7 +1209,8 @@
     return (Array.isArray(d.results) ? d.results : []).filter(function (r) { return r && r.id > 0 && clean(r.name); }).slice(0, 6).map(function (r) { return { cid: Math.floor(r.id), name: collName(r.name) || clean(r.name).slice(0, 80), poster: imgPath(r.poster_path) }; });
   }
   // Готові кіносаги: колекцію TMDB знаходимо за точною назвою, результат зберігаємо в цьому браузері
-  var SAGAS = [['Гаррі Поттер', 'Harry Potter'], ['Володар перснів', 'The Lord of the Rings', 0, { films: [['The Lord of the Rings: The War of the Rohirrim', '2024']] }], ['Хоббіт', 'The Hobbit'], ['Зоряні війни', 'Star Wars', 0, { films: [['Star Wars: The Clone Wars', '2008'], ['Rogue One: A Star Wars Story', '2016'], ['Solo: A Star Wars Story', '2018'], ['The Mandalorian and Grogu', '2026']] }], ['Месники', 'The Avengers'], ['Пірати Карибського моря', 'Pirates of the Caribbean'],
+  // companies: сага без колекції TMDB, збирається з фільмів студій (vc: мінімум голосів, щоб відсіяти дрібне)
+  var SAGAS = [['Marvel', 'Marvel', 0, { companies: '420', vc: 300 }], ['DC', 'DC', 0, { companies: '429|9993|128064|184898', vc: 800 }], ['Гаррі Поттер', 'Harry Potter'], ['Володар перснів', 'The Lord of the Rings', 0, { films: [['The Lord of the Rings: The War of the Rohirrim', '2024']] }], ['Хоббіт', 'The Hobbit'], ['Зоряні війни', 'Star Wars', 0, { films: [['Star Wars: The Clone Wars', '2008'], ['Rogue One: A Star Wars Story', '2016'], ['Solo: A Star Wars Story', '2018'], ['The Mandalorian and Grogu', '2026']] }], ['Месники', 'The Avengers'], ['Пірати Карибського моря', 'Pirates of the Caribbean'],
     ['Сам удома', 'Home Alone'], ['Матриця', 'The Matrix'], ['Голодні ігри', 'The Hunger Games'], ['Індіана Джонс', 'Indiana Jones'], ['Назад у майбутнє', 'Back to the Future'],
     ['Джон Вік', 'John Wick', 0, { films: [['From the World of John Wick: Ballerina', '2025']] }], ['Місія нездійсненна', 'Mission: Impossible'], ['Джеймс Бонд', 'James Bond'], ['Дюна', 'Dune'], ['Аватар', 'Avatar'], ['Темний лицар', 'The Dark Knight'], ['Фантастичні звірі', 'Fantastic Beasts'],
     ['Форсаж', 'The Fast and the Furious', 0, { films: [['Fast & Furious Presents: Hobbs & Shaw', '2019']] }], ['Людина-павук', 'Spider-Man', 0, { cols: ['The Amazing Spider-Man', 'Spider-Man (MCU)', 'Spider-Man: Spider-Verse'] }], ['Сутінки', 'The Twilight Saga'], ['Хрещений батько', 'The Godfather'], ['Той, хто біжить по лезу', 'Blade Runner'],
@@ -1230,7 +1231,13 @@
   // Уся сага: основна колекція + споріднені колекції + окремі фільми всесвіту, за датою виходу
   async function sagaData(q) {
     var s = SAGAS.filter(function (x) { return x[1] === q; })[0], m = sagaLoad()[q]; if (!s || !m || !(m.cid > 0)) throw err('TMDB_HTTP');
-    var ex = s[3] || {}, cids = [m.cid], raw = [], i;
+    var ex = s[3] || {}, cids = ex.companies ? [] : [m.cid], raw = [], i;
+    if (ex.companies) {
+      var cp = { with_companies: ex.companies, 'vote_count.gte': ex.vc || 300, sort_by: 'primary_release_date.asc', language: 'uk-UA', include_adult: 'false' };
+      var d0 = await tmdb('/discover/movie', ext(cp, { page: 1 })), pages = Math.min(4, Number(d0.total_pages) || 1), more = [];
+      for (i = 2; i <= pages; i++) more.push(tmdb('/discover/movie', ext(cp, { page: i })));
+      [d0].concat(await Promise.all(more)).forEach(function (d) { (Array.isArray(d.results) ? d.results : []).forEach(function (r) { raw.push(r); }); });
+    }
     for (i = 0; i < (ex.cols || []).length; i++) { try { var h = await collHit(ex.cols[i]); if (h && cids.indexOf(Math.floor(h.id)) < 0) cids.push(Math.floor(h.id)); } catch (e) { /* без цієї гілки */ } }
     for (i = 0; i < cids.length; i++) {
       try { var d = await tmdb('/collection/' + cids[i], { language: 'uk-UA' }); (Array.isArray(d.parts) ? d.parts : []).forEach(function (r) { raw.push(r); }); }
@@ -1260,7 +1267,12 @@
       var n = 0;
       for (var i = 0; i < todo.length; i++) {
         try {
-          var q = todo[i][1], hit = await collHit(q);
+          var q = todo[i][1], cx = todo[i][3] && todo[i][3].companies, hit;
+          if (cx) {
+            // обкладинка — найпопулярніший фільм студії; cid умовний, лише як ключ марафону
+            var dp = await tmdb('/discover/movie', { with_companies: cx, sort_by: 'popularity.desc', 'vote_count.gte': 1000, page: 1 }), top = (Array.isArray(dp.results) ? dp.results : []).filter(function (r) { return r && imgPath(r.backdrop_path); })[0];
+            hit = top ? { id: 990000000 + Math.floor(Number(cx.split('|')[0])), backdrop_path: top.backdrop_path, poster_path: top.poster_path } : null;
+          } else hit = await collHit(q);
           m[q] = hit && hit.id > 0 ? { cid: Math.floor(hit.id), back: imgPath(hit.backdrop_path), poster: imgPath(hit.poster_path) } : { miss: 1 }; n++;
         } catch (e) { if (e && (e.code === 'TMDB_NETWORK' || e.status === 401 || e.status === 429)) break; }
       }
