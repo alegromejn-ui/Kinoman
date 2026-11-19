@@ -244,7 +244,14 @@
     }).join('') : [0, 1, 2, 3, 4].map(function () { return '<div class="cw sk" aria-hidden="true"><span class="cw-img"></span><i></i><i></i></div>'; }).join('');
     return '<section class="shelf sagas" data-sagas="' + (toon ? 1 : 0) + '"><div class="shelf-h"><h2>' + (toon ? 'Мультсаги' : 'Кіносаги') + '</h2><span class="shelf-acts"><button class="more-link" data-act="marfind">Знайти іншу</button>' + shelfDel(toon ? 'sagas-toon' : 'sagas', toon ? 'Мультсаги' : 'Кіносаги') + '</span></div><div class="strip">' + cards + '</div></section>';
   }
-  function paintSagas() { var box = app && app.querySelector('[data-sagas]'); if (!box || ui.tab !== 'home') return; var h = sagaShelf(box.getAttribute('data-sagas') === '1'); if (h) box.outerHTML = h; else box.remove(); }
+  // Перемальовує рядок саг, коли довантажились нові, і зберігає, куди його прогорнули
+  function paintSagas() {
+    var box = app && app.querySelector('[data-sagas]'); if (!box || ui.tab !== 'home') return;
+    var st = box.querySelector('.strip'), x = st ? st.scrollLeft : 0, h = sagaShelf(box.getAttribute('data-sagas') === '1');
+    if (!h) { box.remove(); return; }
+    var tmp = document.createElement('div'); tmp.innerHTML = h; var nb = tmp.firstElementChild; box.replaceWith(nb);
+    var ns = nb.querySelector('.strip'); if (ns && x) ns.scrollLeft = x;
+  }
   function shelvesHtml(defs) {
     var a = defs.map(shelfSection), all = mix();
     if (all || ui.homeMt !== 'tv') a.splice(Math.min(2, a.length), 0, sagaShelf(!all && ui.homeMt === 'toon'));
